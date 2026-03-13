@@ -329,17 +329,15 @@ class WhisperEngine(QObject):
         return self.config.get_active_prompt()
 
     def _warmup_ollama(self):
-        """Send a short request to load the model into VRAM."""
+        """Load the model into VRAM without generating a response."""
         try:
             model = self.config.get("ollama_model")
             print(f"[Ollama] Värmer upp {model}...")
             requests.post(
-                "http://localhost:11434/api/chat",
+                "http://localhost:11434/api/generate",
                 json={
                     "model": model,
-                    "stream": False,
                     "keep_alive": "10m",
-                    "messages": [{"role": "user", "content": "ok"}],
                 },
                 timeout=120,
             )
@@ -431,7 +429,6 @@ class WhisperEngine(QObject):
         if not text:
             return
         self.last_injected_window = self._get_foreground_window()
-        print(f"[TypeText] Fönster: {self.last_injected_window}, text: {text!r}")
         old_clipboard = ""
         try:
             old_clipboard = pyperclip.paste()
@@ -446,9 +443,7 @@ class WhisperEngine(QObject):
             time.sleep(0.2)
             pyperclip.copy(old_clipboard)
             self.last_injected_text = text
-            print(f"[TypeText] OK")
         except Exception as e:
-            print(f"[TypeText] FEL: {e}")
             self.error.emit(f"Kunde inte skriva in text: {e}")
 
     def _replace_last_text(self, new_text):
