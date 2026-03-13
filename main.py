@@ -46,6 +46,9 @@ class WhisperTyperApp:
         self.engine.ai_started.connect(self._on_ai)
         self.engine.ai_done.connect(self._on_ai_done)
 
+        # Sync profile changes to tray menu
+        self.dashboard.profiles_changed.connect(self._update_profile_menu)
+
         # Load model in background
         self._loader = ModelLoaderThread(self.engine)
         self._loader.finished.connect(self._on_model_loaded)
@@ -120,7 +123,7 @@ class WhisperTyperApp:
         self.dashboard.activateWindow()
 
     def _copy_last_text(self):
-        text = self.engine.last_typed_text
+        text = self.engine.last_injected_text
         if text:
             import pyperclip
             pyperclip.copy(text)

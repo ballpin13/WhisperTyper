@@ -47,7 +47,9 @@ class WhisperEngine(QObject):
         self._last_recording_duration = 0.0
 
         # Text injection tracking
-        self.last_typed_text = ""
+        self.last_dictated_text = ""
+        self.last_injected_text = ""
+        self.last_injected_window = 0
         self._kb_controller = pynput_keyboard.Controller()
 
         # Hotkey listener
@@ -191,6 +193,15 @@ class WhisperEngine(QObject):
         except (ValueError, TypeError):
             return None
 
+    def _get_foreground_window(self):
+        """Return active window HWND, or 0 if win32gui unavailable."""
+        try:
+            import win32gui
+            hwnd = win32gui.GetForegroundWindow()
+            return hwnd if hwnd else 0
+        except ImportError:
+            return 0
+
     def _process_recording(self, mode):
         if self._last_recording_duration < 0.5:
             self.error.emit("Inspelning för kort")
@@ -240,6 +251,7 @@ class WhisperEngine(QObject):
         if mode == "dictate":
             text = smart_punctuation(text)
             self._type_text(text)
+            self.last_dictated_text = text
             self._play_sound("done")
             self.transcription_done.emit(text, mode)
             self.config.add_history_entry(text, 0, mode)
@@ -248,7 +260,7 @@ class WhisperEngine(QObject):
             self._handle_ai_edit(text)
 
     def _handle_ai_edit(self, instruction):
-        if not self.last_typed_text:
+        if not self.last_dictated_text:
             self.error.emit("Ingen tidigare text att redigera. Diktera med F9 först.")
             return
 
@@ -262,11 +274,11 @@ class WhisperEngine(QObject):
                 new_text = self._ai_cloud(instruction)
 
             if new_text:
-                self.ai_done.emit(self.last_typed_text, new_text)
                 self._replace_last_text(new_text)
+                self.ai_done.emit(self.last_dictated_text, new_text)
                 self.config.add_history_entry(
                     new_text, 0, "ai_edit",
-                    original_text=self.last_typed_text,
+                    original_text=self.last_dictated_text,
                 )
         except Exception as e:
             self.error.emit(f"AI-fel: {e}")
@@ -286,7 +298,7 @@ class WhisperEngine(QObject):
                     {"role": "system", "content": self._get_system_prompt()},
                     {
                         "role": "user",
-                        "content": f'Ursprunglig text: "{self.last_typed_text}"\n\nInstruktion: {instruction}',
+                        "content": f'Ursprunglig text: "{self.last_dictated_text}"\n\nInstruktion: {instruction}',
                     },
                 ],
             },
@@ -307,7 +319,7 @@ class WhisperEngine(QObject):
             {"role": "system", "content": self._get_system_prompt()},
             {
                 "role": "user",
-                "content": f'Ursprunglig text: "{self.last_typed_text}"\n\nInstruktion: {instruction}',
+                "content": f'Ursprunglig text: "{self.last_dictated_text}"\n\nInstruktion: {instruction}',
             },
         ]
 
@@ -343,7 +355,7 @@ class WhisperEngine(QObject):
                     "messages": [
                         {
                             "role": "user",
-                            "content": f'Ursprunglig text: "{self.last_typed_text}"\n\nInstruktion: {instruction}',
+                            "content": f'Ursprunglig text: "{self.last_dictated_text}"\n\nInstruktion: {instruction}',
                         }
                     ],
                     "max_tokens": 1000,
@@ -356,6 +368,7 @@ class WhisperEngine(QObject):
     def _type_text(self, text):
         if not text:
             return
+        self.last_injected_window = self._get_foreground_window()
         old_clipboard = ""
         try:
             old_clipboard = pyperclip.paste()
@@ -369,14 +382,22 @@ class WhisperEngine(QObject):
                 self._kb_controller.tap("v")
             time.sleep(0.2)
             pyperclip.copy(old_clipboard)
-            self.last_typed_text = text
+            self.last_injected_text = text
         except Exception as e:
             self.error.emit(f"Kunde inte skriva in text: {e}")
 
     def _replace_last_text(self, new_text):
-        if self.last_typed_text:
-            for _ in range(len(self.last_typed_text)):
+        current_window = self._get_foreground_window()
+        same_window = (
+            current_window != 0
+            and self.last_injected_window != 0
+            and current_window == self.last_injected_window
+        )
+        if same_window and self.last_injected_text:
+            for i in range(len(self.last_injected_text)):
                 self._kb_controller.tap(pynput_keyboard.Key.backspace)
+                if i % 20 == 19:
+                    time.sleep(0.01)
             time.sleep(0.05)
         self._type_text(new_text)
 
@@ -400,14 +421,18 @@ class WhisperEngine(QObject):
 
     def ai_edit_text(self, instruction, original_text):
         """AI edit triggered from UI (not via hotkey)."""
-        self.last_typed_text = original_text
         self.ai_started.emit()
         try:
             provider = self.config.get("ai_provider")
-            if provider == "ollama":
-                new_text = self._ai_ollama(instruction)
-            else:
-                new_text = self._ai_cloud(instruction)
+            saved = self.last_dictated_text
+            self.last_dictated_text = original_text
+            try:
+                if provider == "ollama":
+                    new_text = self._ai_ollama(instruction)
+                else:
+                    new_text = self._ai_cloud(instruction)
+            finally:
+                self.last_dictated_text = saved
             if new_text:
                 self.ai_done.emit(original_text, new_text)
                 self.config.add_history_entry(
