@@ -28,19 +28,14 @@ class WhisperTyperApp:
         self.app.setQuitOnLastWindowClosed(False)
         self.app.setApplicationName("WhisperTyper")
 
-        print("[WhisperTyper] Startar...")
         self.config = ConfigManager()
-        print("[WhisperTyper] Config laddad")
         self.engine = WhisperEngine(self.config)
-        print("[WhisperTyper] Engine skapad")
 
         # Dashboard
         self.dashboard = Dashboard(self.config, self.engine)
-        print("[WhisperTyper] Dashboard skapad")
 
         # System tray
         self._setup_tray()
-        print("[WhisperTyper] Tray-ikon aktiv")
 
         # Connect engine signals to tray
         self.engine.model_loading.connect(self._on_model_loading)
@@ -55,8 +50,6 @@ class WhisperTyperApp:
         self._loader = ModelLoaderThread(self.engine)
         self._loader.finished.connect(self._on_model_loaded)
         self._loader.start()
-        print("[WhisperTyper] Modell laddas i bakgrunden...")
-        print("[WhisperTyper] Kolla system tray (vid klockan, klicka ^ för dolda ikoner)")
 
     def _setup_tray(self):
         self.tray = QSystemTrayIcon(self.app)
@@ -155,9 +148,7 @@ class WhisperTyperApp:
             )
 
     def _on_model_loaded(self):
-        print("[WhisperTyper] Modell laddad! Startar hotkey-lyssnare...")
         self.engine.start_hotkey_listener()
-        print("[WhisperTyper] REDO! Håll F9 för diktering, F10 för AI-redigering.")
 
     @Slot(str)
     def _on_recording(self, mode):

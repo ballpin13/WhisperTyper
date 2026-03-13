@@ -81,7 +81,6 @@ class WhisperEngine(QObject):
             if self.model is None:
                 return
             normalized = self._normalize_key(key)
-            print(f"[DEBUG] press: {key!r} -> '{normalized}' (expect '{dictate_key}'/'{ai_key}', recording={self._is_recording})")
             if normalized == dictate_key and not self._is_recording:
                 self._start_recording("dictate")
             elif normalized == ai_key and not self._is_recording:
@@ -89,7 +88,6 @@ class WhisperEngine(QObject):
 
         def on_release(key):
             normalized = self._normalize_key(key)
-            print(f"[DEBUG] release: {key!r} -> '{normalized}' (recording={self._is_recording})")
             if normalized in (dictate_key, ai_key) and self._is_recording:
                 self._stop_recording()
 
@@ -124,7 +122,6 @@ class WhisperEngine(QObject):
         self._recording_done.clear()
         self.recording_started.emit(mode)
         self._play_sound("start")
-        print(f"[REC] Inspelning startad ({mode})")
         t = threading.Thread(target=self._record_audio, daemon=True)
         t.start()
 
@@ -133,13 +130,11 @@ class WhisperEngine(QObject):
             return
         mode = self._recording_mode
         self._is_recording = False
-        print(f"[REC] Inspelning stoppad ({mode}), väntar på ljudtråd...")
         t = threading.Thread(target=self._wait_and_process, args=(mode,), daemon=True)
         t.start()
 
     def _wait_and_process(self, mode):
         self._recording_done.wait(timeout=3)
-        print(f"[REC] Ljudtråd klar, bearbetar...")
         self._process_recording(mode)
 
     def _record_audio(self):
@@ -179,7 +174,6 @@ class WhisperEngine(QObject):
         with self._audio_lock:
             self._audio_frames = frames
 
-        print(f"[REC] Ljudström stängd ({duration:.1f}s, {len(frames)} chunks)")
         self._recording_done.set()
         self.recording_stopped.emit(duration)
 
@@ -197,11 +191,8 @@ class WhisperEngine(QObject):
             frames = list(self._audio_frames)
 
         if not frames:
-            print("[PROC] Inga frames inspelade!")
             self.error.emit("Inget ljud inspelat.")
             return
-
-        print(f"[PROC] {len(frames)} frames, sparar WAV...")
         # Save WAV
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             tmp_path = f.name
@@ -212,9 +203,7 @@ class WhisperEngine(QObject):
             wf.writeframes(b"".join(frames))
 
         # Transcribe
-        print(f"[PROC] Transkriberar med {self.device}...")
         self.transcription_started.emit()
-        t0 = time.time()
         try:
             lang = self.config.get("language")
             if lang == "auto":
@@ -226,7 +215,6 @@ class WhisperEngine(QObject):
                 condition_on_previous_text=True,
             )
             text = "".join(s.text for s in segments).strip()
-            print(f"[PROC] Klar på {time.time()-t0:.1f}s: {text[:60]}")
         except Exception as e:
             self.error.emit(f"Whisper-fel: {e}")
             return
