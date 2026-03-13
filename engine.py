@@ -44,6 +44,7 @@ class WhisperEngine(QObject):
         self._audio_frames = []
         self._audio_lock = threading.Lock()
         self._recording_done = threading.Event()
+        self._last_recording_duration = 0.0
 
         # Text injection tracking
         self.last_typed_text = ""
@@ -173,6 +174,7 @@ class WhisperEngine(QObject):
         stream.close()
         pa.terminate()
         duration = time.time() - start
+        self._last_recording_duration = duration
 
         with self._audio_lock:
             self._audio_frames = frames
@@ -190,6 +192,10 @@ class WhisperEngine(QObject):
             return None
 
     def _process_recording(self, mode):
+        if self._last_recording_duration < 0.5:
+            self.error.emit("Inspelning för kort")
+            return
+
         with self._audio_lock:
             frames = list(self._audio_frames)
 

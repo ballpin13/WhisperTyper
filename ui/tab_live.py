@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTextEdit, QComboBox, QFrame,
 )
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, Slot, QTimer
 from PySide6.QtGui import QFont
 from datetime import datetime
 import threading
@@ -192,6 +192,11 @@ class LiveTab(QWidget):
 
     @Slot(str)
     def _on_error(self, msg):
+        self._status_dot.setStyleSheet("color: #FF9800; font-size: 20px;")
+        self._status_text.setText(msg)
+        QTimer.singleShot(2000, self._reset_status)
+
+    def _reset_status(self):
         self._status_dot.setStyleSheet("color: #4CAF50; font-size: 20px;")
         self._status_text.setText("Redo")
 
