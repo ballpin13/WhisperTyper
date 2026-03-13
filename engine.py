@@ -312,6 +312,8 @@ class WhisperEngine(QObject):
                     new_text, 0, "ai_edit",
                     original_text=self.last_dictated_text,
                 )
+            else:
+                self.error.emit("AI returnerade tom text.")
         except Exception as e:
             self.error.emit(f"AI-fel: {e}")
 
