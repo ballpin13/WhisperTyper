@@ -365,8 +365,9 @@ class WhisperEngine(QObject):
             pyperclip.copy(text)
             time.sleep(0.05)
             with self._kb_controller.pressed(pynput_keyboard.Key.ctrl):
+                time.sleep(0.05)
                 self._kb_controller.tap("v")
-            time.sleep(0.15)
+            time.sleep(0.2)
             pyperclip.copy(old_clipboard)
             self.last_typed_text = text
         except Exception as e:
