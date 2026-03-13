@@ -5,6 +5,7 @@ import tempfile
 import time
 import wave
 import threading
+from pathlib import Path
 
 import pyaudio
 import requests
@@ -15,6 +16,8 @@ from PySide6.QtCore import QObject, Signal
 
 from config import ConfigManager
 from punctuation import smart_punctuation
+
+ASSETS = Path(__file__).parent / "assets"
 
 
 class WhisperEngine(QObject):
@@ -377,7 +380,17 @@ class WhisperEngine(QObject):
             return
         if sound_type == "done" and not self.config.get("sound_on_transcription_done"):
             return
-        # TODO: Implement sound playback with QMediaPlayer
+        sound_file = ASSETS / f"sound_{sound_type}.wav"
+        if not sound_file.exists():
+            return
+        try:
+            import winsound
+            winsound.PlaySound(
+                str(sound_file),
+                winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT,
+            )
+        except ImportError:
+            pass  # Not on Windows, skip sound
 
     def ai_edit_text(self, instruction, original_text):
         """AI edit triggered from UI (not via hotkey)."""
