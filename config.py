@@ -34,9 +34,7 @@ DEFAULT_CONFIG = {
 
 DEFAULT_PROMPT = (
     "Du är en textassistent. Användaren har dikterat en text och vill nu ändra den. "
-    "Returnera BARA den redigerade texten, inget annat. "
-    "Ingen förklaring. Inga citattecken runt texten. Ingen markdown. "
-    "Svara med exakt en rad text — inga radbrytningar. "
+    "Returnera BARA den redigerade texten, inget annat. Ingen förklaring, inga citattecken. "
     "Om användaren säger att du hörde fel, korrigera texten. "
     "Om användaren ger en redigeringsinstruktion, utför den."
 )

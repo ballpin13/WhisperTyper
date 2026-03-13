@@ -328,14 +328,15 @@ class WhisperEngine(QObject):
             self.error.emit(f"AI-fel: {e}")
 
     def _clean_ai_response(self, text):
-        """Strip quotes and whitespace that LLMs sometimes add."""
+        """Clean up common LLM formatting issues."""
         text = text.strip()
-        # Remove surrounding quotes
-        if len(text) >= 2 and text[0] == text[-1] and text[0] in ('"', "'", '\u201c', '\u201d'):
-            text = text[1:-1].strip()
-        # Also handle mismatched smart quotes
-        if text.startswith('\u201c') and text.endswith('\u201d'):
-            text = text[1:-1].strip()
+        # Remove surrounding quotes (straight and smart)
+        for open_q, close_q in [('"', '"'), ("'", "'"), ('\u201c', '\u201d'), ('\u2018', '\u2019')]:
+            if text.startswith(open_q) and text.endswith(close_q) and len(text) >= 2:
+                text = text[1:-1].strip()
+                break
+        # Collapse newlines to spaces
+        text = " ".join(text.split())
         return text
 
     def _get_system_prompt(self):
