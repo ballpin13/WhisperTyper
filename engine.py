@@ -41,7 +41,6 @@ class WhisperEngine(QObject):
         self._audio_frames = []
         self._audio_lock = threading.Lock()
         self._recording_done = threading.Event()
-        self._pa = pyaudio.PyAudio()
 
         # Text injection tracking
         self.last_typed_text = ""
@@ -145,6 +144,7 @@ class WhisperEngine(QObject):
 
     def _record_audio(self):
         mic_index = self._get_mic_index()
+        pa = pyaudio.PyAudio()
         kwargs = dict(
             format=pyaudio.paInt16,
             channels=1,
@@ -155,7 +155,7 @@ class WhisperEngine(QObject):
         if mic_index is not None:
             kwargs["input_device_index"] = mic_index
 
-        stream = self._pa.open(**kwargs)
+        stream = pa.open(**kwargs)
         start = time.time()
         frames = []
 
@@ -166,14 +166,13 @@ class WhisperEngine(QObject):
 
         stream.stop_stream()
         stream.close()
+        pa.terminate()
         duration = time.time() - start
 
         with self._audio_lock:
             self._audio_frames = frames
 
-        audio_bytes = len(frames) * 1024 * 2  # 16-bit = 2 bytes per sample
-        audio_sec = audio_bytes / (16000 * 2)
-        print(f"[REC] Ljudström stängd ({duration:.1f}s, {len(frames)} chunks, ~{audio_sec:.1f}s ljud)")
+        print(f"[REC] Ljudström stängd ({duration:.1f}s, {len(frames)} chunks)")
         self._recording_done.set()
         self.recording_stopped.emit(duration)
 
@@ -201,7 +200,7 @@ class WhisperEngine(QObject):
             tmp_path = f.name
         with wave.open(tmp_path, "wb") as wf:
             wf.setnchannels(1)
-            wf.setsampwidth(self._pa.get_sample_size(pyaudio.paInt16))
+            wf.setsampwidth(2)  # 16-bit = 2 bytes
             wf.setframerate(16000)
             wf.writeframes(b"".join(frames))
 
@@ -407,13 +406,14 @@ class WhisperEngine(QObject):
 
     def get_microphones(self):
         """List available microphones."""
+        pa = pyaudio.PyAudio()
         mics = []
-        for i in range(self._pa.get_device_count()):
-            info = self._pa.get_device_info_by_index(i)
+        for i in range(pa.get_device_count()):
+            info = pa.get_device_info_by_index(i)
             if info["maxInputChannels"] > 0:
                 mics.append({"index": i, "name": info["name"]})
+        pa.terminate()
         return mics
 
     def cleanup(self):
         self.stop_hotkey_listener()
-        self._pa.terminate()
