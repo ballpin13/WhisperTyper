@@ -81,6 +81,7 @@ class WhisperEngine(QObject):
             if self.model is None:
                 return
             normalized = self._normalize_key(key)
+            print(f"[DEBUG] press: {key!r} -> '{normalized}' (expect '{dictate_key}'/'{ai_key}', recording={self._is_recording})")
             if normalized == dictate_key and not self._is_recording:
                 self._start_recording("dictate")
             elif normalized == ai_key and not self._is_recording:
@@ -88,6 +89,7 @@ class WhisperEngine(QObject):
 
         def on_release(key):
             normalized = self._normalize_key(key)
+            print(f"[DEBUG] release: {key!r} -> '{normalized}' (recording={self._is_recording})")
             if normalized in (dictate_key, ai_key) and self._is_recording:
                 self._stop_recording()
 
