@@ -292,12 +292,16 @@ class WhisperEngine(QObject):
             self._handle_ai_edit(text)
 
     def _handle_ai_edit(self, instruction):
+        print(f"[AI] Instruktion: {instruction}")
+        print(f"[AI] Originaltext: {self.last_dictated_text!r}")
         if not self.last_dictated_text:
+            print("[AI] Ingen originaltext — avbryter")
             self.error.emit("Ingen tidigare text att redigera. Diktera med F9 först.")
             return
 
         self.ai_started.emit()
         provider = self.config.get("ai_provider")
+        print(f"[AI] Provider: {provider}")
 
         try:
             if provider == "ollama":
@@ -305,6 +309,7 @@ class WhisperEngine(QObject):
             else:
                 new_text = self._ai_cloud(instruction)
 
+            print(f"[AI] Resultat: {new_text!r}")
             if new_text:
                 self._replace_last_text(new_text)
                 self.ai_done.emit(self.last_dictated_text, new_text)
@@ -315,6 +320,7 @@ class WhisperEngine(QObject):
             else:
                 self.error.emit("AI returnerade tom text.")
         except Exception as e:
+            print(f"[AI] FEL: {e}")
             self.error.emit(f"AI-fel: {e}")
 
     def _get_system_prompt(self):
