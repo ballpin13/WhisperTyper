@@ -177,9 +177,11 @@ class WhisperEngine(QObject):
             frames = list(self._audio_frames)
 
         if not frames:
+            print("[PROC] Inga frames inspelade!")
             self.error.emit("Inget ljud inspelat.")
             return
 
+        print(f"[PROC] {len(frames)} frames, sparar WAV...")
         # Save WAV
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             tmp_path = f.name
@@ -190,7 +192,9 @@ class WhisperEngine(QObject):
             wf.writeframes(b"".join(frames))
 
         # Transcribe
+        print(f"[PROC] Transkriberar med {self.device}...")
         self.transcription_started.emit()
+        t0 = time.time()
         try:
             lang = self.config.get("language")
             if lang == "auto":
@@ -202,6 +206,7 @@ class WhisperEngine(QObject):
                 condition_on_previous_text=True,
             )
             text = "".join(s.text for s in segments).strip()
+            print(f"[PROC] Klar på {time.time()-t0:.1f}s: {text[:60]}")
         except Exception as e:
             self.error.emit(f"Whisper-fel: {e}")
             return
