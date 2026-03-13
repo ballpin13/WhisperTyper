@@ -121,6 +121,7 @@ class WhisperEngine(QObject):
         self._recording_mode = mode
         self.recording_started.emit(mode)
         self._play_sound("start")
+        print(f"[REC] Inspelning startad ({mode})")
         t = threading.Thread(target=self._record_audio, daemon=True)
         t.start()
 
@@ -129,6 +130,7 @@ class WhisperEngine(QObject):
             return
         mode = self._recording_mode
         self._is_recording = False
+        print(f"[REC] Inspelning stoppad ({mode})")
         t = threading.Thread(target=self._process_recording, args=(mode,), daemon=True)
         t.start()
 
@@ -196,9 +198,8 @@ class WhisperEngine(QObject):
             segments, info = self.model.transcribe(
                 tmp_path,
                 language=lang,
-                beam_size=5,
+                beam_size=1,
                 condition_on_previous_text=True,
-                vad_filter=True,
             )
             text = "".join(s.text for s in segments).strip()
         except Exception as e:
