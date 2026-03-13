@@ -311,6 +311,8 @@ class WhisperEngine(QObject):
             else:
                 new_text = self._ai_cloud(instruction)
 
+            if new_text:
+                new_text = self._clean_ai_response(new_text)
             print(f"[AI] Resultat: {new_text!r}")
             if new_text:
                 self._replace_last_text(new_text)
@@ -324,6 +326,17 @@ class WhisperEngine(QObject):
         except Exception as e:
             print(f"[AI] FEL: {e}")
             self.error.emit(f"AI-fel: {e}")
+
+    def _clean_ai_response(self, text):
+        """Strip quotes and whitespace that LLMs sometimes add."""
+        text = text.strip()
+        # Remove surrounding quotes
+        if len(text) >= 2 and text[0] == text[-1] and text[0] in ('"', "'", '\u201c', '\u201d'):
+            text = text[1:-1].strip()
+        # Also handle mismatched smart quotes
+        if text.startswith('\u201c') and text.endswith('\u201d'):
+            text = text[1:-1].strip()
+        return text
 
     def _get_system_prompt(self):
         return self.config.get_active_prompt()
