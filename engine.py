@@ -231,12 +231,11 @@ class WhisperEngine(QObject):
             self.error.emit("Inget tal kändes igen.")
             return
 
-        self._play_sound("done")
-
         if mode == "dictate":
             text = smart_punctuation(text)
-            self.transcription_done.emit(text, mode)
             self._type_text(text)
+            self._play_sound("done")
+            self.transcription_done.emit(text, mode)
             self.config.add_history_entry(text, 0, mode)
         elif mode == "ai":
             self.transcription_done.emit(text, mode)
