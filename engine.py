@@ -145,24 +145,31 @@ class WhisperEngine(QObject):
     def _record_audio(self):
         mic_index = self._get_mic_index()
         pa = pyaudio.PyAudio()
+        frames = []
+
+        def audio_callback(in_data, frame_count, time_info, status):
+            frames.append(in_data)
+            if self._is_recording:
+                return (None, pyaudio.paContinue)
+            return (None, pyaudio.paComplete)
+
         kwargs = dict(
             format=pyaudio.paInt16,
             channels=1,
             rate=16000,
             input=True,
             frames_per_buffer=1024,
+            stream_callback=audio_callback,
         )
         if mic_index is not None:
             kwargs["input_device_index"] = mic_index
 
         stream = pa.open(**kwargs)
         start = time.time()
-        frames = []
-
         max_sec = self.config.get("max_record_sec")
-        while self._is_recording and (time.time() - start) < max_sec:
-            data = stream.read(1024, exception_on_overflow=False)
-            frames.append(data)
+
+        while stream.is_active() and self._is_recording and (time.time() - start) < max_sec:
+            time.sleep(0.05)
 
         stream.stop_stream()
         stream.close()
