@@ -429,6 +429,7 @@ class WhisperEngine(QObject):
         if not text:
             return
         self.last_injected_window = self._get_foreground_window()
+        print(f"[TypeText] Fönster: {self.last_injected_window}, text: {text!r}")
         old_clipboard = ""
         try:
             old_clipboard = pyperclip.paste()
@@ -443,7 +444,9 @@ class WhisperEngine(QObject):
             time.sleep(0.2)
             pyperclip.copy(old_clipboard)
             self.last_injected_text = text
+            print("[TypeText] OK")
         except Exception as e:
+            print(f"[TypeText] FEL: {e}")
             self.error.emit(f"Kunde inte skriva in text: {e}")
 
     def _replace_last_text(self, new_text):
