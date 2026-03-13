@@ -208,22 +208,23 @@ class SettingsTab(QWidget):
         row = QHBoxLayout()
         row.addWidget(QLabel("Aktiv profil:"))
         self._prompt_combo = QComboBox()
-        self._update_prompt_combo()
-        self._prompt_combo.currentIndexChanged.connect(self._on_prompt_profile_changed)
-        row.addWidget(self._prompt_combo)
 
         self._add_profile_btn = QPushButton("Skapa ny")
         self._add_profile_btn.setStyleSheet(
             "QPushButton { padding: 4px 12px; font-size: 11px; }"
         )
         self._add_profile_btn.clicked.connect(self._add_profile)
-        row.addWidget(self._add_profile_btn)
 
         self._del_profile_btn = QPushButton("Ta bort")
         self._del_profile_btn.setStyleSheet(
             "QPushButton { padding: 4px 12px; font-size: 11px; color: #c62828; }"
         )
         self._del_profile_btn.clicked.connect(self._delete_profile)
+
+        self._update_prompt_combo()
+        self._prompt_combo.currentIndexChanged.connect(self._on_prompt_profile_changed)
+        row.addWidget(self._prompt_combo)
+        row.addWidget(self._add_profile_btn)
         row.addWidget(self._del_profile_btn)
         row.addStretch()
         pl.addLayout(row)
