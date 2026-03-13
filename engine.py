@@ -160,6 +160,8 @@ class WhisperEngine(QObject):
         self._recording_done.clear()
         self.recording_started.emit(mode)
         self._play_sound("start")
+        if mode == "dictate" and self.config.get("ai_provider") == "ollama":
+            threading.Thread(target=self._warmup_ollama, daemon=True).start()
         t = threading.Thread(target=self._record_audio, daemon=True)
         t.start()
 
@@ -326,6 +328,25 @@ class WhisperEngine(QObject):
     def _get_system_prompt(self):
         return self.config.get_active_prompt()
 
+    def _warmup_ollama(self):
+        """Send a short request to load the model into VRAM."""
+        try:
+            model = self.config.get("ollama_model")
+            print(f"[Ollama] Värmer upp {model}...")
+            requests.post(
+                "http://localhost:11434/api/chat",
+                json={
+                    "model": model,
+                    "stream": False,
+                    "keep_alive": "10m",
+                    "messages": [{"role": "user", "content": "ok"}],
+                },
+                timeout=120,
+            )
+            print(f"[Ollama] Modell redo")
+        except Exception:
+            pass
+
     def _ai_ollama(self, instruction):
         url = "http://localhost:11434"
         model = self.config.get("ollama_model")
@@ -334,6 +355,7 @@ class WhisperEngine(QObject):
             json={
                 "model": model,
                 "stream": False,
+                "keep_alive": "10m",
                 "messages": [
                     {"role": "system", "content": self._get_system_prompt()},
                     {
