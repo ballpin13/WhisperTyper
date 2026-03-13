@@ -54,6 +54,8 @@ class WhisperEngine(QObject):
 
         # Hotkey listener
         self._hotkey_listener = None
+        self._active_modifiers = set()
+        self._active_hotkey = None
 
     def _update_device(self):
         choice = self.config.get("whisper_device")
@@ -80,22 +82,39 @@ class WhisperEngine(QObject):
 
     def start_hotkey_listener(self):
         """Start global hotkey listener."""
-        dictate_key = self._parse_key(self.config.get("hotkey_dictate"))
-        ai_key = self._parse_key(self.config.get("hotkey_ai"))
+        dictate_parsed = self._parse_key(self.config.get("hotkey_dictate"))
+        ai_parsed = self._parse_key(self.config.get("hotkey_ai"))
 
         def on_press(key):
-            if self.model is None:
+            if key in (pynput_keyboard.Key.ctrl_l, pynput_keyboard.Key.ctrl_r):
+                self._active_modifiers.add("ctrl")
+            elif key in (pynput_keyboard.Key.alt_l, pynput_keyboard.Key.alt_r, pynput_keyboard.Key.alt_gr):
+                self._active_modifiers.add("alt")
+            elif key in (pynput_keyboard.Key.shift_l, pynput_keyboard.Key.shift_r):
+                self._active_modifiers.add("shift")
+
+            if self.model is None or self._is_recording:
                 return
+
             normalized = self._normalize_key(key)
-            if normalized == dictate_key and not self._is_recording:
-                self._start_recording("dictate")
-            elif normalized == ai_key and not self._is_recording:
-                self._start_recording("ai")
+            for hotkey_config, mode in [(dictate_parsed, "dictate"), (ai_parsed, "ai")]:
+                if normalized == hotkey_config["key"] and self._active_modifiers == hotkey_config["modifiers"]:
+                    self._start_recording(mode)
+                    self._active_hotkey = hotkey_config["key"]
+                    break
 
         def on_release(key):
+            if key in (pynput_keyboard.Key.ctrl_l, pynput_keyboard.Key.ctrl_r):
+                self._active_modifiers.discard("ctrl")
+            elif key in (pynput_keyboard.Key.alt_l, pynput_keyboard.Key.alt_r, pynput_keyboard.Key.alt_gr):
+                self._active_modifiers.discard("alt")
+            elif key in (pynput_keyboard.Key.shift_l, pynput_keyboard.Key.shift_r):
+                self._active_modifiers.discard("shift")
+
             normalized = self._normalize_key(key)
-            if normalized in (dictate_key, ai_key) and self._is_recording:
+            if normalized == self._active_hotkey and self._is_recording:
                 self._stop_recording()
+                self._active_hotkey = None
 
         self._hotkey_listener = pynput_keyboard.Listener(
             on_press=on_press,
@@ -108,9 +127,22 @@ class WhisperEngine(QObject):
         if self._hotkey_listener:
             self._hotkey_listener.stop()
 
+    def restart_hotkey_listener(self):
+        """Restart listener to pick up new hotkey config."""
+        self.stop_hotkey_listener()
+        self._active_modifiers.clear()
+        self._active_hotkey = None
+        self.start_hotkey_listener()
+
     def _parse_key(self, key_str):
-        """Convert config key string like 'F9' to comparable value."""
-        return key_str.lower()
+        """Parse 'ctrl+f9' → {'modifiers': {'ctrl'}, 'key': 'f9'}"""
+        parts = key_str.lower().split("+")
+        modifiers = set()
+        key = parts[-1]
+        for p in parts[:-1]:
+            if p in ("ctrl", "alt", "shift"):
+                modifiers.add(p)
+        return {"modifiers": modifiers, "key": key}
 
     def _normalize_key(self, key):
         """Normalize a pynput key to a comparable string."""
