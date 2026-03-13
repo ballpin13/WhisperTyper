@@ -40,6 +40,7 @@ class WhisperEngine(QObject):
         self._recording_mode = None
         self._audio_frames = []
         self._audio_lock = threading.Lock()
+        self._recording_done = threading.Event()
         self._pa = pyaudio.PyAudio()
 
         # Text injection tracking
@@ -119,6 +120,7 @@ class WhisperEngine(QObject):
     def _start_recording(self, mode):
         self._is_recording = True
         self._recording_mode = mode
+        self._recording_done.clear()
         self.recording_started.emit(mode)
         self._play_sound("start")
         print(f"[REC] Inspelning startad ({mode})")
@@ -130,9 +132,14 @@ class WhisperEngine(QObject):
             return
         mode = self._recording_mode
         self._is_recording = False
-        print(f"[REC] Inspelning stoppad ({mode})")
-        t = threading.Thread(target=self._process_recording, args=(mode,), daemon=True)
+        print(f"[REC] Inspelning stoppad ({mode}), väntar på ljudtråd...")
+        t = threading.Thread(target=self._wait_and_process, args=(mode,), daemon=True)
         t.start()
+
+    def _wait_and_process(self, mode):
+        self._recording_done.wait(timeout=3)
+        print(f"[REC] Ljudtråd klar, bearbetar...")
+        self._process_recording(mode)
 
     def _record_audio(self):
         mic_index = self._get_mic_index()
@@ -159,6 +166,8 @@ class WhisperEngine(QObject):
         stream.stop_stream()
         stream.close()
         duration = time.time() - start
+        print(f"[REC] Ljudström stängd ({duration:.1f}s, {len(self._audio_frames)} frames)")
+        self._recording_done.set()
         self.recording_stopped.emit(duration)
 
     def _get_mic_index(self):
@@ -171,8 +180,6 @@ class WhisperEngine(QObject):
             return None
 
     def _process_recording(self, mode):
-        time.sleep(0.1)
-
         with self._audio_lock:
             frames = list(self._audio_frames)
 
