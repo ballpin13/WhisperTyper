@@ -9,8 +9,7 @@ import threading
 import pyaudio
 import requests
 import pyperclip
-import torch
-import whisper
+from faster_whisper import WhisperModel
 from pynput import keyboard as pynput_keyboard
 from PySide6.QtCore import QObject, Signal
 
@@ -53,17 +52,24 @@ class WhisperEngine(QObject):
     def _update_device(self):
         choice = self.config.get("whisper_device")
         if choice == "auto":
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            try:
+                import torch
+                self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            except ImportError:
+                self.device = "cpu"
         else:
             self.device = choice
         self.use_cuda = self.device == "cuda"
+        self.compute_type = "float16" if self.use_cuda else "int8"
 
     def load_model(self):
         """Load Whisper model in current thread (call from QThread)."""
         self._update_device()
         self.model_loading.emit()
         model_name = self.config.get("whisper_model")
-        self.model = whisper.load_model(model_name, device=self.device)
+        self.model = WhisperModel(
+            model_name, device=self.device, compute_type=self.compute_type
+        )
         self.model_ready.emit()
 
     def start_hotkey_listener(self):
@@ -182,13 +188,17 @@ class WhisperEngine(QObject):
         # Transcribe
         self.transcription_started.emit()
         try:
-            result = self.model.transcribe(
+            lang = self.config.get("language")
+            if lang == "auto":
+                lang = None
+            segments, info = self.model.transcribe(
                 tmp_path,
-                language=self.config.get("language"),
-                fp16=self.use_cuda,
+                language=lang,
+                beam_size=5,
                 condition_on_previous_text=True,
+                vad_filter=True,
             )
-            text = result["text"].strip()
+            text = "".join(s.text for s in segments).strip()
         except Exception as e:
             self.error.emit(f"Whisper-fel: {e}")
             return

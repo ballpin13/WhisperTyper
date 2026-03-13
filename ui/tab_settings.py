@@ -68,10 +68,13 @@ class SettingsTab(QWidget):
         self._device_combo = QComboBox()
         self._device_combo.addItem("Auto", "auto")
         self._device_combo.addItem("CPU", "cpu")
-        import torch
-        if torch.cuda.is_available():
-            gpu_name = torch.cuda.get_device_name(0)
-            self._device_combo.addItem(f"GPU ({gpu_name})", "cuda")
+        try:
+            import torch
+            if torch.cuda.is_available():
+                gpu_name = torch.cuda.get_device_name(0)
+                self._device_combo.addItem(f"GPU ({gpu_name})", "cuda")
+        except ImportError:
+            pass  # torch not installed, CUDA option not available
         current_device = self.config.get("whisper_device")
         for i in range(self._device_combo.count()):
             if self._device_combo.itemData(i) == current_device:
@@ -391,9 +394,13 @@ class SettingsTab(QWidget):
     # ── Helpers ──
 
     def _update_device_note(self):
-        import torch
-        if not torch.cuda.is_available():
-            self._device_note.setText("(GPU ej tillgänglig — installera CUDA-version av PyTorch)")
+        try:
+            import torch
+            has_cuda = torch.cuda.is_available()
+        except ImportError:
+            has_cuda = False
+        if not has_cuda:
+            self._device_note.setText("(GPU kräver NVIDIA GPU + CUDA)")
         else:
             self._device_note.setText(f"(Aktiv: {self.engine.device.upper()})")
 
