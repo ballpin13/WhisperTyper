@@ -342,7 +342,7 @@ class WhisperEngine(QObject):
                     },
                 ],
             },
-            timeout=30,
+            timeout=120,
         )
         response.raise_for_status()
         return response.json()["message"]["content"].strip()
