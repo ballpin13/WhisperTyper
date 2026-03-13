@@ -450,17 +450,23 @@ class WhisperEngine(QObject):
 
     def _replace_last_text(self, new_text):
         current_window = self._get_foreground_window()
+        print(f"[Replace] current_window={current_window} last_injected_window={self.last_injected_window}")
+        print(f"[Replace] last_injected_text={self.last_injected_text!r}")
         same_window = (
             current_window != 0
             and self.last_injected_window != 0
             and current_window == self.last_injected_window
         )
         if same_window and self.last_injected_text:
+            print(f"[Replace] Samma fönster — kör {len(self.last_injected_text)} backspace")
             for i in range(len(self.last_injected_text)):
                 self._kb_controller.tap(pynput_keyboard.Key.backspace)
                 if i % 20 == 19:
                     time.sleep(0.01)
             time.sleep(0.05)
+        else:
+            print(f"[Replace] Annat fönster/noll — skippar backspace")
+        print(f"[Replace] Klistrar in: {new_text!r}")
         self._type_text(new_text)
 
     def _play_sound(self, sound_type):
