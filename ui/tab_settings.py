@@ -9,6 +9,10 @@ import requests
 
 
 class SettingsTab(QWidget):
+    from PySide6.QtCore import Signal
+    profiles_changed = Signal()
+    hotkey_changed = Signal()
+
     def __init__(self, config, engine):
         super().__init__()
         self.config = config
@@ -431,6 +435,7 @@ class SettingsTab(QWidget):
             return
         self._hotkey_error.setVisible(False)
         self.config.set(key, value)
+        self.hotkey_changed.emit()
 
     def _on_provider_changed(self, index):
         provider = self._provider_combo.itemData(index)
@@ -532,6 +537,7 @@ class SettingsTab(QWidget):
             idx = self._prompt_combo.findData(pid)
             if idx >= 0:
                 self._prompt_combo.setCurrentIndex(idx)
+            self.profiles_changed.emit()
 
     def _delete_profile(self):
         pid = self._prompt_combo.currentData()
@@ -548,6 +554,7 @@ class SettingsTab(QWidget):
                 self.config.delete_prompt_profile(pid)
                 self.config.set("active_prompt_profile", "standard")
                 self._update_prompt_combo()
+                self.profiles_changed.emit()
             except ValueError as e:
                 QMessageBox.warning(self, "Fel", str(e))
 
@@ -591,9 +598,13 @@ class KeyCaptureButton(QPushButton):
 
     def keyPressEvent(self, event):
         if self._capturing:
-            key_name = event.text() or event.key()
-            # Map Qt key codes to readable names
             from PySide6.QtCore import Qt as QtKey
+            key_code = event.key()
+
+            modifier_keys = {QtKey.Key_Control, QtKey.Key_Shift, QtKey.Key_Alt, QtKey.Key_Meta}
+            if key_code in modifier_keys:
+                return
+
             key_map = {
                 QtKey.Key_F1: "F1", QtKey.Key_F2: "F2", QtKey.Key_F3: "F3",
                 QtKey.Key_F4: "F4", QtKey.Key_F5: "F5", QtKey.Key_F6: "F6",
@@ -602,20 +613,31 @@ class KeyCaptureButton(QPushButton):
                 QtKey.Key_Escape: "Escape", QtKey.Key_Space: "Space",
                 QtKey.Key_Return: "Return", QtKey.Key_Tab: "Tab",
             }
-            key_code = event.key()
+
+            parts = []
+            mods = event.modifiers()
+            if mods & QtKey.ControlModifier:
+                parts.append("Ctrl")
+            if mods & QtKey.AltModifier:
+                parts.append("Alt")
+            if mods & QtKey.ShiftModifier:
+                parts.append("Shift")
+
             if key_code in key_map:
                 key_str = key_map[key_code]
             elif event.text():
                 key_str = event.text().upper()
             else:
                 key_str = f"Key_{key_code}"
+            parts.append(key_str)
+            combo_str = "+".join(parts)
 
             self._capturing = False
-            self.setText(key_str)
+            self.setText(combo_str)
             self.setStyleSheet("""
                 QPushButton { background: white; border: 1px solid #e0e0e0;
                               border-radius: 4px; padding: 6px 12px; }
             """)
-            self.key_changed.emit(key_str)
+            self.key_changed.emit(combo_str)
         else:
             super().keyPressEvent(event)

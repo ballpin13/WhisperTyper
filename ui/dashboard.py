@@ -37,6 +37,11 @@ class Dashboard(QMainWindow):
         self._tabs.addTab(self._history_tab, "Historik")
         self._tabs.addTab(self._settings_tab, "Inst\u00e4llningar")
 
+        self._settings_tab.profiles_changed.connect(self._live_tab.refresh_profiles)
+        self._settings_tab.hotkey_changed.connect(
+            lambda: self.engine.restart_hotkey_listener()
+        )
+
         self.setCentralWidget(self._tabs)
 
     def show_settings(self):
@@ -44,6 +49,14 @@ class Dashboard(QMainWindow):
         self.show()
         self.raise_()
         self.activateWindow()
+
+    @property
+    def profiles_changed(self):
+        return self._settings_tab.profiles_changed
+
+    @property
+    def hotkey_changed(self):
+        return self._settings_tab.hotkey_changed
 
     def closeEvent(self, event):
         event.ignore()
