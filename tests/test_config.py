@@ -18,7 +18,7 @@ class TestConfigManager:
         assert cm.get("whisper_model") == "medium"
         assert cm.get("language") == "sv"
         assert cm.get("hotkey_dictate") == "F9"
-        assert cm.get("hotkey_ai") == "F10"
+        assert cm.get("hotkey_ai") == "ctrl+f9"
 
     def test_set_and_get(self, tmp_config_dir):
         from config import ConfigManager

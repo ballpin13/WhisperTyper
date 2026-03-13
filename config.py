@@ -13,7 +13,7 @@ DEFAULT_CONFIG = {
     "whisper_device": "auto",
     "language": "sv",
     "hotkey_dictate": "F9",
-    "hotkey_ai": "F10",
+    "hotkey_ai": "ctrl+f9",
     "ai_provider": "ollama",
     "ollama_model": "mistral:7b",
     "cloud_provider": "openai",

@@ -5,3 +5,4 @@ pynput
 pyperclip
 requests
 Pillow
+pywin32; sys_platform == "win32"  # Window tracking (optional)
