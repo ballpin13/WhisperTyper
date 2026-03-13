@@ -34,8 +34,7 @@ class WhisperEngine(QObject):
         super().__init__()
         self.config = config
         self.model = None
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.use_cuda = torch.cuda.is_available()
+        self._update_device()
 
         # Recording state
         self._is_recording = False
@@ -51,8 +50,17 @@ class WhisperEngine(QObject):
         # Hotkey listener
         self._hotkey_listener = None
 
+    def _update_device(self):
+        choice = self.config.get("whisper_device")
+        if choice == "auto":
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        else:
+            self.device = choice
+        self.use_cuda = self.device == "cuda"
+
     def load_model(self):
         """Load Whisper model in current thread (call from QThread)."""
+        self._update_device()
         self.model_loading.emit()
         model_name = self.config.get("whisper_model")
         self.model = whisper.load_model(model_name, device=self.device)

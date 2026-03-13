@@ -10,6 +10,7 @@ APP_NAME = "WhisperTyper"
 
 DEFAULT_CONFIG = {
     "whisper_model": "medium",
+    "whisper_device": "auto",
     "language": "sv",
     "hotkey_dictate": "F9",
     "hotkey_ai": "F10",

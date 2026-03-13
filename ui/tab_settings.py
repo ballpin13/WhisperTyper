@@ -62,16 +62,28 @@ class SettingsTab(QWidget):
         row.addStretch()
         wl.addLayout(row)
 
-        # Device info
+        # Device
         row = QHBoxLayout()
         row.addWidget(QLabel("Enhet:"))
-        device_text = self.engine.device
-        if self.engine.use_cuda:
-            import torch
-            device_text = f"GPU ({torch.cuda.get_device_name(0)})"
-        else:
-            device_text = "CPU"
-        row.addWidget(QLabel(device_text))
+        self._device_combo = QComboBox()
+        self._device_combo.addItem("Auto", "auto")
+        self._device_combo.addItem("CPU", "cpu")
+        import torch
+        if torch.cuda.is_available():
+            gpu_name = torch.cuda.get_device_name(0)
+            self._device_combo.addItem(f"GPU ({gpu_name})", "cuda")
+        current_device = self.config.get("whisper_device")
+        for i in range(self._device_combo.count()):
+            if self._device_combo.itemData(i) == current_device:
+                self._device_combo.setCurrentIndex(i)
+        self._device_combo.currentIndexChanged.connect(
+            lambda i: self._save("whisper_device", self._device_combo.itemData(i))
+        )
+        row.addWidget(self._device_combo)
+        self._device_note = QLabel("")
+        self._device_note.setStyleSheet("color: #666; font-size: 11px;")
+        self._update_device_note()
+        row.addWidget(self._device_note)
         row.addStretch()
         wl.addLayout(row)
 
@@ -377,6 +389,13 @@ class SettingsTab(QWidget):
         main_layout.addWidget(scroll)
 
     # ── Helpers ──
+
+    def _update_device_note(self):
+        import torch
+        if not torch.cuda.is_available():
+            self._device_note.setText("(GPU ej tillgänglig — installera CUDA-version av PyTorch)")
+        else:
+            self._device_note.setText(f"(Aktiv: {self.engine.device.upper()})")
 
     def _section_label(self, text):
         label = QLabel(text)
