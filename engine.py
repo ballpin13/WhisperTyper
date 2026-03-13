@@ -118,6 +118,8 @@ class WhisperEngine(QObject):
         return str(key).lower()
 
     def _start_recording(self, mode):
+        with self._audio_lock:
+            self._audio_frames = []
         self._is_recording = True
         self._recording_mode = mode
         self._recording_done.clear()
@@ -155,18 +157,23 @@ class WhisperEngine(QObject):
 
         stream = self._pa.open(**kwargs)
         start = time.time()
-        with self._audio_lock:
-            self._audio_frames = []
+        frames = []
 
         max_sec = self.config.get("max_record_sec")
         while self._is_recording and (time.time() - start) < max_sec:
             data = stream.read(1024, exception_on_overflow=False)
-            self._audio_frames.append(data)
+            frames.append(data)
 
         stream.stop_stream()
         stream.close()
         duration = time.time() - start
-        print(f"[REC] Ljudström stängd ({duration:.1f}s, {len(self._audio_frames)} frames)")
+
+        with self._audio_lock:
+            self._audio_frames = frames
+
+        audio_bytes = len(frames) * 1024 * 2  # 16-bit = 2 bytes per sample
+        audio_sec = audio_bytes / (16000 * 2)
+        print(f"[REC] Ljudström stängd ({duration:.1f}s, {len(frames)} chunks, ~{audio_sec:.1f}s ljud)")
         self._recording_done.set()
         self.recording_stopped.emit(duration)
 
