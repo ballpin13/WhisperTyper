@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+.eggs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+*:Zone.Identifier
+*:Zone.Identifier:Zone.Identifier
+
+# App data
+.superpowers/
+.pytest_cache/
+
+# Config (may contain API keys)
+config.json

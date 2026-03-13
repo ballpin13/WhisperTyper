@@ -1,0 +1,8 @@
+PySide6>=6.5
+openai-whisper
+torch
+pyaudio
+pynput
+pyperclip
+requests
+Pillow
