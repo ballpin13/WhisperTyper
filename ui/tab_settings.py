@@ -136,12 +136,12 @@ class SettingsTab(QWidget):
         ollama_inner.addWidget(QLabel("Ollama-modell:"))
         self._ollama_model_combo = QComboBox()
         self._ollama_model_combo.setMinimumWidth(200)
+        self._ollama_retry_btn = QPushButton("F\u00f6rs\u00f6k igen")
         self._load_ollama_models()
         self._ollama_model_combo.currentTextChanged.connect(
             lambda v: self._save("ollama_model", v)
         )
         ollama_inner.addWidget(self._ollama_model_combo)
-        self._ollama_retry_btn = QPushButton("F\u00f6rs\u00f6k igen")
         self._ollama_retry_btn.setStyleSheet(
             "QPushButton { padding: 4px 8px; font-size: 11px; }"
         )
