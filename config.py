@@ -15,7 +15,7 @@ DEFAULT_CONFIG = {
     "hotkey_dictate": "F9",
     "hotkey_ai": "ctrl+f9",
     "ai_provider": "ollama",
-    "ollama_model": "mistral:7b",
+    "ollama_model": "gemma3:12b",
     "cloud_provider": "openai",
     "cloud_model": "gpt-4o-mini",
     "cloud_api_key": "",
