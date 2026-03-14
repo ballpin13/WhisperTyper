@@ -4,7 +4,7 @@
 
 Gör inställningsfliken mer kompakt och användbar genom att:
 - Minska 9 separata kort till 4 grupper med tunna avdelare
-- Använda grid-layout för label+kontroll på samma rad
+- Använda `QFormLayout` för label+kontroll på samma rad
 - Flytta ordlistan till en dialog
 - Fixa scroll-hijacking på QComboBox-dropdowns
 
@@ -19,12 +19,24 @@ Gör inställningsfliken mer kompakt och användbar genom att:
 ### Layoutstruktur
 
 Bort med `QFrame`-kort och `_card()`-metoden. Ersätt med:
-- **Grupprubrik**: blå versaler, liten font, `letter-spacing: 0.5px`
+- **Grupprubrik**: blå versaler, liten font (versaler via `text.upper()` i Python — Qt QSS stödjer inte `text-transform`)
 - **Tunn avdelare**: `QFrame(HLine)` med 1px höjd mellan grupper
-- **Grid-layout** inom varje grupp: labels ~110px, kontroller fyller resten
+- **`QFormLayout`** inom varje grupp: labels ~110px, kontroller fyller resten
 - **Tight spacing**: 4px vertikalt gap inom grupper, 12px mellan grupper
 
 Scroll-area behålls som säkerhet men målet är att allt ryms utan scrollning.
+
+### Bevarade beteenden
+
+Följande **måste** bevaras vid omskrivning:
+- **Signaler**: `profiles_changed` och `hotkey_changed` — konsumeras av `dashboard.py` och `main.py`
+- **Save-modell**: Combo/slider/checkbox sparar direkt via `config.set()`. Prompttext och ordlista sparas explicit via knapp/dialog.
+- **`KeyCaptureButton`-klassen** — behålls oförändrad (separat widget)
+- **Villkorlig visning**: `_update_provider_visibility()` och `_update_whisper_provider_visibility()` — samma logik, kan refaktoreras men beteendet bevaras
+- **Hotkey-konfliktvarning**: `_hotkey_error` QLabel som visas vid dubblettbindningar
+- **Enhetsnotering**: `_device_note` QLabel som visar GPU-status
+- **Cloud-nyckelnotering**: "Använder API-nyckel från AI-inställningarna" vid cloud-transkribering
+- **Dialoger**: `QInputDialog` vid ny profil, `QMessageBox.question` vid radering — bevaras
 
 ### Gruppering (9 sektioner → 4 grupper)
 
@@ -33,32 +45,33 @@ Sammanslår: Whisper + Ordlista
 
 | Label | Kontroll |
 |-------|----------|
-| Provider | `QComboBox` — Lokal (Whisper) / Cloud |
-| Modell | `QComboBox` — tiny/base/small/medium/large (lokal) eller cloud-modeller |
-| Enhet | `QComboBox` — Auto/CPU/GPU (bara vid lokal) |
-| Cloud-provider | `QComboBox` — Groq/OpenAI (bara vid cloud) |
-| Språk | `QComboBox` — Svenska/Engelska/Auto-detect |
-| Ordlista | `QPushButton` "Redigera…" → öppnar `QDialog` |
+| Provider | `NoScrollComboBox` — Lokal (Whisper) / Cloud |
+| Modell | `NoScrollComboBox` — tiny/base/small/medium/large (lokal) eller cloud-modeller |
+| Enhet | `NoScrollComboBox` — Auto/CPU/GPU (bara vid lokal) + enhetsnotering |
+| Cloud-provider | `NoScrollComboBox` — Groq/OpenAI (bara vid cloud) |
+| Språk | `NoScrollComboBox` — Svenska/Engelska/Auto-detect |
+| Ordlista | `QPushButton` "Redigera…" → öppnar `VocabularyDialog` |
 
 Villkorlig visning: Modell+Enhet visas vid lokal, Cloud-provider+Cloud-modell visas vid cloud. Samma logik som idag.
+
+Vid cloud visas även notering: "Använder API-nyckel från AI-inställningarna" (liten grå text).
 
 #### 2. AI-redigering
 Sammanslår: AI-redigering + Promptprofiler
 
 | Label | Kontroll |
 |-------|----------|
-| Provider | `QComboBox` — Lokal (Ollama) / Cloud |
-| Ollama-modell | `QComboBox` + Retry-knapp (bara vid Ollama) |
-| Cloud-provider | `QComboBox` — OpenAI/Anthropic/Groq (bara vid cloud) |
-| Modell | `QComboBox` (bara vid cloud) |
+| Provider | `NoScrollComboBox` — Lokal (Ollama) / Cloud |
+| Ollama-modell | `NoScrollComboBox` + Retry-knapp (bara vid Ollama) |
+| Cloud-provider | `NoScrollComboBox` — OpenAI/Anthropic/Groq (bara vid cloud) |
+| Modell | `NoScrollComboBox` (bara vid cloud) |
 | API-nyckel | `QLineEdit` password (bara vid cloud) |
 
-Promptprofiler (under AI-inställningarna, ej i grid):
-- **Rad**: `QComboBox` profil + "Ny"-länk + "Ta bort"-länk
+Promptprofiler (under AI-inställningarna, ej i form-layout):
+- **Rad**: `NoScrollComboBox` profil + "Ny"-knapp + "Ta bort"-knapp (styling som idag: liten `QPushButton`)
 - **Checkbox**: "Kör automatiskt på varje diktering"
-- **QTextEdit**: Prompttext (kompakt, ~48px höjd)
-
-Prompttext behålls inline — den är det mest använda inställningen.
+- **QTextEdit**: Prompttext (~80px höjd, placeholder: `'Lämna tom för enkel korrigering, eller skriv en instruktion (t.ex. "Översätt till engelska")'`)
+- **QPushButton**: "Spara prompt" (samma stil som idag)
 
 #### 3. Kontroller
 Sammanslår: Kortkommandon + Mikrofon + Max inspelningstid
@@ -67,13 +80,15 @@ Sammanslår: Kortkommandon + Mikrofon + Max inspelningstid
 |-------|----------|
 | Diktera | `KeyCaptureButton` |
 | AI-redigering | `KeyCaptureButton` |
-| Mikrofon | `QComboBox` |
+| Mikrofon | `NoScrollComboBox` |
 | Max inspelningstid | `QSlider` + label (sek) |
+
+Hotkey-konfliktvarning (`_hotkey_error` QLabel) visas under hotkey-raderna vid dubbletter.
 
 #### 4. Ljud & Övrigt
 Sammanslår: Ljud + Notiser + Övrigt
 
-Checkboxar i en horisontell rad:
+Checkboxar i en horisontell rad (`QHBoxLayout`):
 - ☑ Ljud vid start
 - ☑ Ljud vid klar
 - ☑ Popup-notis
@@ -82,7 +97,7 @@ Checkboxar i en horisontell rad:
 |-------|----------|
 | Volym | `QSlider` + label (%) |
 | Notisvaraktighet | `QSlider` + label (sek) |
-| Max historik | `QComboBox` |
+| Max historik | `NoScrollComboBox` |
 
 Sist:
 - ☐ Autostart vid inloggning
@@ -91,9 +106,12 @@ Sist:
 
 `VocabularyDialog(QDialog)`:
 - **Titel**: "Ordlista"
-- **Innehåll**: `QPlainTextEdit` med hint "Ett ord per rad"
+- **Innehåll**: `QPlainTextEdit` med hint "Ange ord som Whisper ska känna igen, ett per rad"
 - **Knappar**: Spara / Avbryt (`QDialogButtonBox`)
 - Höjd: ~200px, bredd: ~300px
+- **Vid öppning**: laddar ord från `config.get_vocabulary()`
+- **Vid Spara**: anropar `config.set_vocabulary(words)` och stänger dialogen
+- **Vid Avbryt**: stänger utan att spara
 
 ### QComboBox scroll-fix
 
@@ -114,10 +132,9 @@ Alla `QComboBox` i `SettingsTab` ersätts med `NoScrollComboBox`.
 
 ```python
 def _group_label(self, text):
-    label = QLabel(text)
+    label = QLabel(text.upper())
     label.setStyleSheet(
-        "color: #1976D2; font-size: 10px; font-weight: bold; "
-        "text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px;"
+        "color: #1976D2; font-size: 10px; font-weight: bold; margin-top: 4px;"
     )
     return label
 ```
@@ -128,7 +145,7 @@ def _group_label(self, text):
 def _separator(self):
     line = QFrame()
     line.setFrameShape(QFrame.HLine)
-    line.setStyleSheet("color: #eee;")
+    line.setStyleSheet("background-color: #eee; border: none;")
     line.setFixedHeight(1)
     return line
 ```
@@ -137,7 +154,7 @@ def _separator(self):
 
 | Fil | Ändring |
 |-----|---------|
-| `ui/tab_settings.py` | Fullständig omskrivning av `_setup_ui()`, ny `NoScrollComboBox`, ny `VocabularyDialog`, bort med `_card()` och `_section_label()` |
+| `ui/tab_settings.py` | Fullständig omskrivning av `_setup_ui()`, ny `NoScrollComboBox`, ny `VocabularyDialog`, bort med `_card()` och `_section_label()` — `KeyCaptureButton` bevaras oförändrad |
 
 ## Avgränsning
 
