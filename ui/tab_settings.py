@@ -4,12 +4,16 @@ from PySide6.QtWidgets import (
     QPlainTextEdit, QFrame, QScrollArea, QInputDialog, QMessageBox,
     QDialog, QDialogButtonBox, QFormLayout,
 )
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt
 import requests
 
 
 class NoScrollComboBox(QComboBox):
     """QComboBox that ignores wheel events when not focused."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setFocusPolicy(Qt.StrongFocus)
+
     def wheelEvent(self, event):
         if not self.hasFocus():
             event.ignore()
@@ -548,6 +552,7 @@ class SettingsTab(QWidget):
                     idx = self._ollama_model_combo.findText(current)
                     if idx >= 0:
                         self._ollama_model_combo.setCurrentIndex(idx)
+                    self._ollama_model_combo.setEnabled(True)
                     self._ollama_retry_btn.setVisible(False)
                     return
         except Exception:
