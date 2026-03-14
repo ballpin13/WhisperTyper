@@ -34,6 +34,26 @@ class SettingsTab(QWidget):
         whisper_frame = self._card()
         wl = QVBoxLayout(whisper_frame)
 
+        # Provider (local / cloud)
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Transkribering:"))
+        self._whisper_provider_combo = QComboBox()
+        self._whisper_provider_combo.addItem("Lokal (Whisper)", "local")
+        self._whisper_provider_combo.addItem("Cloud", "cloud")
+        current_wp = self.config.get("whisper_provider")
+        for i in range(self._whisper_provider_combo.count()):
+            if self._whisper_provider_combo.itemData(i) == current_wp:
+                self._whisper_provider_combo.setCurrentIndex(i)
+        self._whisper_provider_combo.currentIndexChanged.connect(self._on_whisper_provider_changed)
+        row.addWidget(self._whisper_provider_combo)
+        row.addStretch()
+        wl.addLayout(row)
+
+        # Local options
+        self._whisper_local_widget = QWidget()
+        local_layout = QVBoxLayout(self._whisper_local_widget)
+        local_layout.setContentsMargins(0, 0, 0, 0)
+
         # Model
         row = QHBoxLayout()
         row.addWidget(QLabel("Modell:"))
@@ -46,9 +66,76 @@ class SettingsTab(QWidget):
         )
         row.addWidget(self._model_combo)
         row.addStretch()
-        wl.addLayout(row)
+        local_layout.addLayout(row)
 
-        # Language
+        # Device
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Enhet:"))
+        self._device_combo = QComboBox()
+        self._device_combo.addItem("Auto", "auto")
+        self._device_combo.addItem("CPU", "cpu")
+        try:
+            import torch
+            if torch.cuda.is_available():
+                gpu_name = torch.cuda.get_device_name(0)
+                self._device_combo.addItem(f"GPU ({gpu_name})", "cuda")
+        except ImportError:
+            pass
+        current_device = self.config.get("whisper_device")
+        for i in range(self._device_combo.count()):
+            if self._device_combo.itemData(i) == current_device:
+                self._device_combo.setCurrentIndex(i)
+        self._device_combo.currentIndexChanged.connect(
+            lambda i: self._save("whisper_device", self._device_combo.itemData(i))
+        )
+        row.addWidget(self._device_combo)
+        self._device_note = QLabel("")
+        self._device_note.setStyleSheet("color: #666; font-size: 11px;")
+        self._update_device_note()
+        row.addWidget(self._device_note)
+        row.addStretch()
+        local_layout.addLayout(row)
+
+        wl.addWidget(self._whisper_local_widget)
+
+        # Cloud options
+        self._whisper_cloud_widget = QWidget()
+        cloud_w_layout = QVBoxLayout(self._whisper_cloud_widget)
+        cloud_w_layout.setContentsMargins(0, 0, 0, 0)
+
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Cloud-provider:"))
+        self._cloud_whisper_combo = QComboBox()
+        self._cloud_whisper_combo.addItem("Groq (gratis)", "groq")
+        self._cloud_whisper_combo.addItem("OpenAI", "openai")
+        current_cwp = self.config.get("cloud_whisper_provider")
+        for i in range(self._cloud_whisper_combo.count()):
+            if self._cloud_whisper_combo.itemData(i) == current_cwp:
+                self._cloud_whisper_combo.setCurrentIndex(i)
+        self._cloud_whisper_combo.currentIndexChanged.connect(self._on_cloud_whisper_provider_changed)
+        row.addWidget(self._cloud_whisper_combo)
+        row.addStretch()
+        cloud_w_layout.addLayout(row)
+
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Modell:"))
+        self._cloud_whisper_model_combo = QComboBox()
+        self._update_cloud_whisper_models()
+        self._cloud_whisper_model_combo.currentTextChanged.connect(
+            lambda v: self._save("cloud_whisper_model", v)
+        )
+        row.addWidget(self._cloud_whisper_model_combo)
+        row.addStretch()
+        cloud_w_layout.addLayout(row)
+
+        self._whisper_cloud_key_note = QLabel("Använder API-nyckel från AI-inställningarna")
+        self._whisper_cloud_key_note.setStyleSheet("color: #666; font-size: 11px;")
+        cloud_w_layout.addWidget(self._whisper_cloud_key_note)
+
+        wl.addWidget(self._whisper_cloud_widget)
+        self._update_whisper_provider_visibility()
+
+        # Language (shared between local and cloud)
         row = QHBoxLayout()
         row.addWidget(QLabel("Spr\u00e5k:"))
         self._lang_combo = QComboBox()
@@ -63,34 +150,6 @@ class SettingsTab(QWidget):
             lambda i: self._save("language", self._lang_combo.itemData(i))
         )
         row.addWidget(self._lang_combo)
-        row.addStretch()
-        wl.addLayout(row)
-
-        # Device
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Enhet:"))
-        self._device_combo = QComboBox()
-        self._device_combo.addItem("Auto", "auto")
-        self._device_combo.addItem("CPU", "cpu")
-        try:
-            import torch
-            if torch.cuda.is_available():
-                gpu_name = torch.cuda.get_device_name(0)
-                self._device_combo.addItem(f"GPU ({gpu_name})", "cuda")
-        except ImportError:
-            pass  # torch not installed, CUDA option not available
-        current_device = self.config.get("whisper_device")
-        for i in range(self._device_combo.count()):
-            if self._device_combo.itemData(i) == current_device:
-                self._device_combo.setCurrentIndex(i)
-        self._device_combo.currentIndexChanged.connect(
-            lambda i: self._save("whisper_device", self._device_combo.itemData(i))
-        )
-        row.addWidget(self._device_combo)
-        self._device_note = QLabel("")
-        self._device_note.setStyleSheet("color: #666; font-size: 11px;")
-        self._update_device_note()
-        row.addWidget(self._device_note)
         row.addStretch()
         wl.addLayout(row)
 
@@ -436,6 +495,35 @@ class SettingsTab(QWidget):
         main_layout.addWidget(scroll)
 
     # ── Helpers ──
+
+    def _on_whisper_provider_changed(self, index):
+        provider = self._whisper_provider_combo.itemData(index)
+        self._save("whisper_provider", provider)
+        self._update_whisper_provider_visibility()
+
+    def _update_whisper_provider_visibility(self):
+        is_local = self.config.get("whisper_provider") == "local"
+        self._whisper_local_widget.setVisible(is_local)
+        self._whisper_cloud_widget.setVisible(not is_local)
+
+    def _on_cloud_whisper_provider_changed(self, index):
+        provider = self._cloud_whisper_combo.itemData(index)
+        self._save("cloud_whisper_provider", provider)
+        self._update_cloud_whisper_models()
+
+    def _update_cloud_whisper_models(self):
+        self._cloud_whisper_model_combo.clear()
+        provider = self.config.get("cloud_whisper_provider")
+        if provider == "groq":
+            models = ["whisper-large-v3-turbo", "whisper-large-v3", "distil-whisper-large-v3-en"]
+        else:
+            models = ["whisper-1", "gpt-4o-transcribe", "gpt-4o-mini-transcribe"]
+        current = self.config.get("cloud_whisper_model")
+        for m in models:
+            self._cloud_whisper_model_combo.addItem(m)
+        idx = self._cloud_whisper_model_combo.findText(current)
+        if idx >= 0:
+            self._cloud_whisper_model_combo.setCurrentIndex(idx)
 
     def _update_device_note(self):
         try:

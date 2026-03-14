@@ -38,6 +38,7 @@ class WhisperEngine(QObject):
         super().__init__()
         self.config = config
         self.model = None
+        self._ready = False
         self._update_device()
 
         # Recording state
@@ -74,12 +75,18 @@ class WhisperEngine(QObject):
 
     def load_model(self):
         """Load Whisper model in current thread (call from QThread)."""
+        if self.config.get("whisper_provider") == "cloud":
+            self.model_loading.emit()
+            self._ready = True
+            self.model_ready.emit()
+            return
         self._update_device()
         self.model_loading.emit()
         model_name = self.config.get("whisper_model")
         self.model = WhisperModel(
             model_name, device=self.device, compute_type=self.compute_type
         )
+        self._ready = True
         self.model_ready.emit()
 
     def start_hotkey_listener(self):
@@ -95,7 +102,7 @@ class WhisperEngine(QObject):
             elif key in (pynput_keyboard.Key.shift_l, pynput_keyboard.Key.shift_r):
                 self._active_modifiers.add("shift")
 
-            if self.model is None or self._is_recording:
+            if not self._ready or self._is_recording:
                 return
 
             normalized = self._normalize_key(key)
@@ -261,19 +268,10 @@ class WhisperEngine(QObject):
         # Transcribe
         self.transcription_started.emit()
         try:
-            lang = self.config.get("language")
-            if lang == "auto":
-                lang = None
-            vocab = self.config.get_vocabulary()
-            initial_prompt = ", ".join(vocab) if vocab else None
-            segments, info = self.model.transcribe(
-                tmp_path,
-                language=lang,
-                beam_size=1,
-                condition_on_previous_text=True,
-                initial_prompt=initial_prompt,
-            )
-            text = "".join(s.text for s in segments).strip()
+            if self.config.get("whisper_provider") == "cloud":
+                text = self._transcribe_cloud(tmp_path)
+            else:
+                text = self._transcribe_local(tmp_path)
         except Exception as e:
             self.error.emit(f"Whisper-fel: {e}")
             return
@@ -314,6 +312,58 @@ class WhisperEngine(QObject):
         elif mode == "ai":
             self.transcription_done.emit(text, mode)
             self._handle_ai_edit(text)
+
+    def _transcribe_local(self, tmp_path):
+        lang = self.config.get("language")
+        if lang == "auto":
+            lang = None
+        vocab = self.config.get_vocabulary()
+        initial_prompt = ", ".join(vocab) if vocab else None
+        segments, info = self.model.transcribe(
+            tmp_path,
+            language=lang,
+            beam_size=1,
+            condition_on_previous_text=True,
+            initial_prompt=initial_prompt,
+        )
+        return "".join(s.text for s in segments).strip()
+
+    def _transcribe_cloud(self, tmp_path):
+        provider = self.config.get("cloud_whisper_provider")
+        model = self.config.get("cloud_whisper_model")
+
+        # Reuse API key from cloud AI settings
+        api_key = self.config.get(f"cloud_api_key_{provider}")
+        if not api_key:
+            api_key = self.config.get("cloud_api_key")
+        if not api_key:
+            raise ValueError(f"API-nyckel saknas för {provider}. Ange den i inställningarna.")
+
+        if provider == "groq":
+            url = "https://api.groq.com/openai/v1/audio/transcriptions"
+        else:
+            url = "https://api.openai.com/v1/audio/transcriptions"
+
+        lang = self.config.get("language")
+        data = {"model": model, "response_format": "json"}
+        if lang and lang != "auto":
+            data["language"] = lang
+
+        # Add vocabulary as prompt to guide transcription
+        vocab = self.config.get_vocabulary()
+        if vocab:
+            data["prompt"] = ", ".join(vocab)
+
+        with open(tmp_path, "rb") as f:
+            response = requests.post(
+                url,
+                headers={"Authorization": f"Bearer {api_key}"},
+                files={"file": ("audio.wav", f, "audio/wav")},
+                data=data,
+                timeout=30,
+            )
+        response.raise_for_status()
+        return response.json()["text"].strip()
 
     def _handle_ai_edit(self, instruction):
         print(f"[AI] Instruktion: {instruction}")
