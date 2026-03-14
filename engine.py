@@ -400,9 +400,14 @@ class WhisperEngine(QObject):
             },
         ]
 
-        if cloud_provider == "openai":
+        if cloud_provider in ("openai", "groq"):
+            base_url = (
+                "https://api.groq.com/openai/v1/chat/completions"
+                if cloud_provider == "groq"
+                else "https://api.openai.com/v1/chat/completions"
+            )
             response = requests.post(
-                "https://api.openai.com/v1/chat/completions",
+                base_url,
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",

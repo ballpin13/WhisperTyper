@@ -208,6 +208,7 @@ class SettingsTab(QWidget):
         self._cloud_provider_combo = QComboBox()
         self._cloud_provider_combo.addItem("OpenAI", "openai")
         self._cloud_provider_combo.addItem("Anthropic", "anthropic")
+        self._cloud_provider_combo.addItem("Groq", "groq")
         current_cp = self.config.get("cloud_provider")
         for i in range(self._cloud_provider_combo.count()):
             if self._cloud_provider_combo.itemData(i) == current_cp:
@@ -507,6 +508,14 @@ class SettingsTab(QWidget):
         provider = self.config.get("cloud_provider")
         if provider == "openai":
             models = ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo"]
+        elif provider == "groq":
+            models = [
+                "llama-3.1-8b-instant",
+                "llama-3.3-70b-versatile",
+                "meta-llama/llama-4-scout-17b-16e-instruct",
+                "qwen/qwen3-32b",
+                "moonshotai/kimi-k2-instruct",
+            ]
         else:
             models = ["claude-haiku-3-5-20241022", "claude-sonnet-4-6-20250514", "claude-haiku-4-5-20251001"]
         current = self.config.get("cloud_model")
