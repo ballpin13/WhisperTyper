@@ -61,11 +61,15 @@ pipwin install pyaudio
 
 ---
 
-## Konfiguration (i whisper_typer.py)
+## Konfiguration
 
-```python
-HOTKEY        = "F9"             # Ändra kortkommando
-WHISPER_MODEL = "small"           # Se tabell ovan
-LANGUAGE      = "sv"             # sv=svenska, en=engelska, auto=automatisk
-MAX_RECORD_SEC = 60              # Max inspelningstid
-```
+Alla inställningar nås via **Inställningar-fliken** i appen och sparas i `config.json`.
+
+- **Whisper-modell** — tiny/base/small/medium/large
+- **Språk** — Svenska, Engelska, Auto-detect
+- **Enhet** — Auto, CPU, GPU (NVIDIA CUDA)
+- **Kortkommandon** — Diktering (F9), AI-redigering (Ctrl+F9)
+- **Ordlista** — Ange namn och termer (ett per rad) som Whisper ska känna igen korrekt
+- **AI-redigering** — Ollama (lokal) eller Cloud (OpenAI/Anthropic)
+- **Promptprofiler** — Anpassa AI-instruktioner
+- **Ljud & notiser** — Ljudeffekter och popup-notiser
