@@ -294,7 +294,7 @@ class SettingsTab(QWidget):
             'Lämna tom för enkel korrigering, eller skriv en instruktion (t.ex. "Översätt till engelska")'
         )
         self._prompt_edit.setStyleSheet(
-            "QTextEdit { border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px; }"
+            "QTextEdit { background: white; border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px; }"
         )
         self._load_prompt_text()
         parent_layout.addWidget(self._prompt_edit)
