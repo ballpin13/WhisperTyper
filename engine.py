@@ -454,9 +454,17 @@ class WhisperEngine(QObject):
             pass
         try:
             pyperclip.copy(text)
+            time.sleep(0.1)
+            # Släpp eventuellt kvarvarande modifier-tangenter
+            for key in (pynput_keyboard.Key.ctrl, pynput_keyboard.Key.alt,
+                        pynput_keyboard.Key.shift):
+                try:
+                    self._kb_controller.release(key)
+                except Exception:
+                    pass
             time.sleep(0.05)
             with self._kb_controller.pressed(pynput_keyboard.Key.ctrl):
-                time.sleep(0.05)
+                time.sleep(0.1)
                 self._kb_controller.tap("v")
             time.sleep(0.2)
             pyperclip.copy(old_clipboard)
@@ -496,7 +504,7 @@ class WhisperEngine(QObject):
                 self._kb_controller.tap(pynput_keyboard.Key.backspace)
                 if i % 20 == 19:
                     time.sleep(0.01)
-            time.sleep(0.05)
+            time.sleep(0.15)
 
         print(f"[Replace] Klistrar in: {new_text!r}")
         self._type_text(new_text)
