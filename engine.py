@@ -262,11 +262,14 @@ class WhisperEngine(QObject):
             lang = self.config.get("language")
             if lang == "auto":
                 lang = None
+            vocab = self.config.get_vocabulary()
+            initial_prompt = ", ".join(vocab) if vocab else None
             segments, info = self.model.transcribe(
                 tmp_path,
                 language=lang,
                 beam_size=1,
                 condition_on_previous_text=True,
+                initial_prompt=initial_prompt,
             )
             text = "".join(s.text for s in segments).strip()
         except Exception as e:

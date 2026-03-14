@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QComboBox, QSlider, QCheckBox, QLineEdit, QTextEdit,
-    QFrame, QScrollArea, QInputDialog, QMessageBox,
+    QPlainTextEdit, QFrame, QScrollArea, QInputDialog, QMessageBox,
 )
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QFont
@@ -95,6 +95,35 @@ class SettingsTab(QWidget):
         wl.addLayout(row)
 
         layout.addWidget(whisper_frame)
+
+        # ── Ordlista ──
+        layout.addWidget(self._section_label("Ordlista"))
+        vocab_frame = self._card()
+        vl = QVBoxLayout(vocab_frame)
+
+        vocab_hint = QLabel("Ange ord som Whisper ska känna igen, ett per rad")
+        vocab_hint.setStyleSheet("color: #666; font-size: 11px;")
+        vl.addWidget(vocab_hint)
+
+        self._vocab_edit = QPlainTextEdit()
+        self._vocab_edit.setMaximumHeight(120)
+        self._vocab_edit.setStyleSheet(
+            "QPlainTextEdit { border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px; }"
+        )
+        vocab = self.config.get_vocabulary()
+        self._vocab_edit.setPlainText("\n".join(vocab))
+        vl.addWidget(self._vocab_edit)
+
+        save_vocab_btn = QPushButton("Spara ordlista")
+        save_vocab_btn.setStyleSheet("""
+            QPushButton { background: #e3f2fd; color: #1976D2; border: none;
+                          border-radius: 6px; padding: 6px 16px; font-size: 12px; }
+            QPushButton:hover { background: #bbdefb; }
+        """)
+        save_vocab_btn.clicked.connect(self._save_vocabulary)
+        vl.addWidget(save_vocab_btn, alignment=Qt.AlignLeft)
+
+        layout.addWidget(vocab_frame)
 
         # ── Kortkommandon ──
         layout.addWidget(self._section_label("Kortkommandon"))
@@ -557,6 +586,11 @@ class SettingsTab(QWidget):
                 self.profiles_changed.emit()
             except ValueError as e:
                 QMessageBox.warning(self, "Fel", str(e))
+
+    def _save_vocabulary(self):
+        text = self._vocab_edit.toPlainText()
+        words = [w.strip() for w in text.splitlines() if w.strip()]
+        self.config.set_vocabulary(words)
 
     def _on_volume_changed(self, value):
         self._volume_label.setText(f"{value}%")

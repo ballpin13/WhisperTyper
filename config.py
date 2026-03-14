@@ -30,6 +30,7 @@ DEFAULT_CONFIG = {
     "max_record_sec": 60,
     "autostart": False,
     "max_history": 500,
+    "vocabulary": [],
 }
 
 DEFAULT_PROMPT = (
@@ -127,6 +128,14 @@ class ConfigManager:
                 self._save_json(self._prompts_path, self._prompts)
                 return
         raise ValueError(f"Profile '{profile_id}' not found")
+
+    # ── Vocabulary ──
+    def get_vocabulary(self):
+        return self._config.get("vocabulary", [])
+
+    def set_vocabulary(self, words):
+        self._config["vocabulary"] = words
+        self._save_json(self._config_path, self._config)
 
     # ── History ──
     def get_history(self):
