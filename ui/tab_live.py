@@ -1,9 +1,9 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTextEdit, QComboBox, QFrame,
+    QTextEdit, QFrame,
 )
 from PySide6.QtCore import Qt, Slot, QTimer
-from PySide6.QtGui import QFont
+from ui.tab_settings import NoScrollComboBox
 from datetime import datetime
 import threading
 
@@ -19,55 +19,56 @@ class LiveTab(QWidget):
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        layout.setSpacing(4)
 
-        # Status indicator
-        status_frame = QFrame()
-        status_frame.setStyleSheet(
-            "QFrame { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; }"
-        )
-        status_layout = QHBoxLayout(status_frame)
+        # Status row (no card)
+        status_row = QHBoxLayout()
         self._status_dot = QLabel("\u25cf")
-        self._status_dot.setStyleSheet("color: #9E9E9E; font-size: 20px;")
+        self._status_dot.setStyleSheet("color: #9E9E9E; font-size: 18px;")
         self._status_text = QLabel("Laddar modell...")
-        self._status_text.setFont(QFont("Segoe UI", 12))
-        status_layout.addWidget(self._status_dot)
-        status_layout.addWidget(self._status_text)
-        status_layout.addStretch()
+        self._status_text.setStyleSheet("font-size: 14px; font-weight: 500; color: #333;")
+        status_row.addWidget(self._status_dot)
+        status_row.addWidget(self._status_text)
+        status_row.addStretch()
 
-        # Active prompt profile
-        profile_label = QLabel("Profil:")
-        profile_label.setFont(QFont("Segoe UI", 9))
-        self._profile_combo = QComboBox()
+        # Profile combo in status row
+        profile_label = QLabel("PROFIL")
+        profile_label.setStyleSheet(
+            "color: #1976D2; font-size: 10px; font-weight: bold;"
+        )
+        self._profile_combo = NoScrollComboBox()
         self._profile_combo.setMinimumWidth(150)
         self._update_profile_combo()
         self._profile_combo.currentIndexChanged.connect(self._on_profile_changed)
-        status_layout.addWidget(profile_label)
-        status_layout.addWidget(self._profile_combo)
+        status_row.addWidget(profile_label)
+        status_row.addWidget(self._profile_combo)
 
-        layout.addWidget(status_frame)
+        layout.addLayout(status_row)
 
-        # Last transcription
-        trans_frame = QFrame()
-        trans_frame.setStyleSheet(
-            "QFrame { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; }"
-        )
-        trans_layout = QVBoxLayout(trans_frame)
+        # Separator
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet("background-color: #eee; border: none;")
+        sep.setFixedHeight(1)
+        layout.addWidget(sep)
+        layout.addSpacing(8)
 
+        # Transcription section (no card)
         trans_header = QLabel("SENASTE TRANSKRIBERING")
-        trans_header.setStyleSheet("color: #999; font-size: 11px;")
-        trans_layout.addWidget(trans_header)
+        trans_header.setStyleSheet(
+            "color: #1976D2; font-size: 10px; font-weight: bold; margin-top: 4px;"
+        )
+        layout.addWidget(trans_header)
 
         self._trans_text = QLabel("Ingen transkribering \u00e4nnu.")
         self._trans_text.setWordWrap(True)
-        self._trans_text.setFont(QFont("Segoe UI", 13))
-        self._trans_text.setStyleSheet("color: #333;")
+        self._trans_text.setStyleSheet("font-size: 14px; color: #333; line-height: 1.5;")
         self._trans_text.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        trans_layout.addWidget(self._trans_text)
+        layout.addWidget(self._trans_text)
 
         self._trans_meta = QLabel("")
         self._trans_meta.setStyleSheet("color: #aaa; font-size: 11px;")
-        trans_layout.addWidget(self._trans_meta)
+        layout.addWidget(self._trans_meta)
 
         # Buttons
         btn_layout = QHBoxLayout()
@@ -90,7 +91,7 @@ class LiveTab(QWidget):
         btn_layout.addWidget(self._copy_btn)
         btn_layout.addWidget(self._ai_btn)
         btn_layout.addStretch()
-        trans_layout.addLayout(btn_layout)
+        layout.addLayout(btn_layout)
 
         # AI edit area (hidden by default)
         self._ai_frame = QFrame()
@@ -111,9 +112,8 @@ class LiveTab(QWidget):
         self._ai_send_btn.clicked.connect(self._send_ai_edit)
         ai_layout.addWidget(self._ai_input)
         ai_layout.addWidget(self._ai_send_btn, alignment=Qt.AlignTop)
-        trans_layout.addWidget(self._ai_frame)
+        layout.addWidget(self._ai_frame)
 
-        layout.addWidget(trans_frame)
         layout.addStretch()
 
     def _connect_signals(self):
@@ -147,28 +147,28 @@ class LiveTab(QWidget):
 
     @Slot()
     def _on_model_loading(self):
-        self._status_dot.setStyleSheet("color: #9E9E9E; font-size: 20px;")
+        self._status_dot.setStyleSheet("color: #9E9E9E; font-size: 18px;")
         self._status_text.setText("Laddar modell...")
 
     @Slot()
     def _on_model_ready(self):
-        self._status_dot.setStyleSheet("color: #4CAF50; font-size: 20px;")
+        self._status_dot.setStyleSheet("color: #4CAF50; font-size: 18px;")
         self._status_text.setText("Redo")
 
     @Slot(str)
     def _on_recording_started(self, mode):
-        self._status_dot.setStyleSheet("color: #f44336; font-size: 20px;")
+        self._status_dot.setStyleSheet("color: #f44336; font-size: 18px;")
         mode_text = "Spelar in..." if mode == "dictate" else "Spelar in AI-instruktion..."
         self._status_text.setText(mode_text)
 
     @Slot()
     def _on_transcription_started(self):
-        self._status_dot.setStyleSheet("color: #FFC107; font-size: 20px;")
+        self._status_dot.setStyleSheet("color: #FFC107; font-size: 18px;")
         self._status_text.setText("Transkriberar...")
 
     @Slot(str, str)
     def _on_transcription_done(self, text, mode):
-        self._status_dot.setStyleSheet("color: #4CAF50; font-size: 20px;")
+        self._status_dot.setStyleSheet("color: #4CAF50; font-size: 18px;")
         self._status_text.setText("Redo")
         if mode == "dictate":
             self._trans_text.setText(text)
@@ -178,12 +178,12 @@ class LiveTab(QWidget):
 
     @Slot()
     def _on_ai_started(self):
-        self._status_dot.setStyleSheet("color: #2196F3; font-size: 20px;")
+        self._status_dot.setStyleSheet("color: #2196F3; font-size: 18px;")
         self._status_text.setText("AI bearbetar...")
 
     @Slot(str, str)
     def _on_ai_done(self, original, edited):
-        self._status_dot.setStyleSheet("color: #4CAF50; font-size: 20px;")
+        self._status_dot.setStyleSheet("color: #4CAF50; font-size: 18px;")
         self._status_text.setText("Redo")
         self._trans_text.setText(edited)
         self._trans_meta.setText(
@@ -192,12 +192,12 @@ class LiveTab(QWidget):
 
     @Slot(str)
     def _on_error(self, msg):
-        self._status_dot.setStyleSheet("color: #FF9800; font-size: 20px;")
+        self._status_dot.setStyleSheet("color: #FF9800; font-size: 18px;")
         self._status_text.setText(msg)
         QTimer.singleShot(2000, self._reset_status)
 
     def _reset_status(self):
-        self._status_dot.setStyleSheet("color: #4CAF50; font-size: 20px;")
+        self._status_dot.setStyleSheet("color: #4CAF50; font-size: 18px;")
         self._status_text.setText("Redo")
 
     def _copy_text(self):
