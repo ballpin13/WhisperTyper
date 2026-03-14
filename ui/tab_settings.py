@@ -279,8 +279,17 @@ class SettingsTab(QWidget):
         row.addStretch()
         pl.addLayout(row)
 
+        self._auto_run_cb = QCheckBox("Kör automatiskt på varje diktering")
+        self._auto_run_cb.setToolTip(
+            "AI-profilen körs automatiskt efter varje diktering istället för bara vid AI-redigering"
+        )
+        pl.addWidget(self._auto_run_cb)
+
         self._prompt_edit = QTextEdit()
         self._prompt_edit.setMaximumHeight(100)
+        self._prompt_edit.setPlaceholderText(
+            'Lämna tom för enkel korrigering, eller skriv en instruktion (t.ex. "Översätt till engelska")'
+        )
         self._prompt_edit.setStyleSheet(
             "QTextEdit { border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px; }"
         )
@@ -573,13 +582,15 @@ class SettingsTab(QWidget):
         for p in self.config.get_prompt_profiles():
             if p["id"] == pid:
                 self._prompt_edit.setPlainText(p["system_prompt"])
+                self._auto_run_cb.setChecked(p.get("auto_run", False))
                 return
 
     def _save_prompt(self):
         pid = self._prompt_combo.currentData()
-        text = self._prompt_edit.toPlainText().strip()
-        if pid and text:
-            self.config.update_prompt_profile(pid, text)
+        if pid:
+            text = self._prompt_edit.toPlainText().strip()
+            auto_run = self._auto_run_cb.isChecked()
+            self.config.update_prompt_profile(pid, text, auto_run=auto_run)
 
     def _add_profile(self):
         name, ok = QInputDialog.getText(

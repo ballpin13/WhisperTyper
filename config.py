@@ -36,7 +36,13 @@ DEFAULT_CONFIG = {
     "vocabulary": [],
 }
 
-DEFAULT_PROMPT = (
+BASE_SYSTEM_PROMPT = (
+    "Returnera ENBART den bearbetade texten. "
+    "Ingen förklaring, inga citattecken, inga inledande fraser, inget extra."
+)
+
+# Legacy prompt used for migration detection
+_LEGACY_PROMPT = (
     "Du är en textassistent. Användaren har dikterat en text och vill nu ändra den. "
     "Returnera BARA den redigerade texten, inget annat. Ingen förklaring, inga citattecken. "
     "Om användaren säger att du hörde fel, korrigera texten. "
@@ -48,7 +54,8 @@ DEFAULT_PROMPTS = {
         {
             "id": "standard",
             "name": "Standard",
-            "system_prompt": DEFAULT_PROMPT,
+            "system_prompt": "",
+            "auto_run": False,
             "deletable": False,
         }
     ]
@@ -96,28 +103,56 @@ class ConfigManager:
 
     # ── Prompts ──
     def get_prompt_profiles(self):
+        changed = False
+        for p in self._prompts["profiles"]:
+            # Migration: add auto_run if missing
+            if "auto_run" not in p:
+                p["auto_run"] = False
+                changed = True
+            # Migration: clear legacy prompt
+            if p["system_prompt"] == _LEGACY_PROMPT:
+                p["system_prompt"] = ""
+                changed = True
+        if changed:
+            self._save_json(self._prompts_path, self._prompts)
         return self._prompts["profiles"]
 
     def get_active_prompt(self):
         active_id = self.get("active_prompt_profile")
-        for p in self._prompts["profiles"]:
+        for p in self.get_prompt_profiles():
             if p["id"] == active_id:
                 return p["system_prompt"]
         return self._prompts["profiles"][0]["system_prompt"]
 
-    def add_prompt_profile(self, profile_id, name, system_prompt):
+    def get_full_system_prompt(self):
+        profile_prompt = self.get_active_prompt()
+        if profile_prompt:
+            return f"{BASE_SYSTEM_PROMPT}\n\n{profile_prompt}"
+        return BASE_SYSTEM_PROMPT
+
+    def get_active_auto_run(self):
+        active_id = self.get("active_prompt_profile")
+        for p in self.get_prompt_profiles():
+            if p["id"] == active_id:
+                return p.get("auto_run", False)
+        return False
+
+    def add_prompt_profile(self, profile_id, name, system_prompt, auto_run=False):
         self._prompts["profiles"].append({
             "id": profile_id,
             "name": name,
             "system_prompt": system_prompt,
+            "auto_run": auto_run,
             "deletable": True,
         })
         self._save_json(self._prompts_path, self._prompts)
 
-    def update_prompt_profile(self, profile_id, system_prompt):
+    def update_prompt_profile(self, profile_id, system_prompt, auto_run=None):
         for p in self._prompts["profiles"]:
             if p["id"] == profile_id:
                 p["system_prompt"] = system_prompt
+                if auto_run is not None:
+                    p["auto_run"] = auto_run
                 self._save_json(self._prompts_path, self._prompts)
                 return
         raise ValueError(f"Profile '{profile_id}' not found")

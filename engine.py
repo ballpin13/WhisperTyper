@@ -30,6 +30,8 @@ class WhisperEngine(QObject):
     transcription_done = Signal(str, str)     # text, mode
     ai_started = Signal()
     ai_done = Signal(str, str)               # original, edited
+    auto_ai_started = Signal()
+    auto_ai_done = Signal(str, str)          # raw_whisper, transformed
     error = Signal(str)                       # error message
 
     def __init__(self, config: ConfigManager):
@@ -287,11 +289,28 @@ class WhisperEngine(QObject):
 
         if mode == "dictate":
             text = smart_punctuation(text)
-            self._type_text(text)
-            self.last_dictated_text = text
-            self._play_sound("done")
-            self.transcription_done.emit(text, mode)
-            self.config.add_history_entry(text, 0, mode)
+            if self.config.get_active_auto_run():
+                raw_text = text
+                self.auto_ai_started.emit()
+                try:
+                    text = self._ai_auto_transform(text)
+                    self.auto_ai_done.emit(raw_text, text)
+                except Exception as e:
+                    print(f"[AutoAI] FEL: {e}")
+                    self.error.emit(f"Auto-AI-fel: {e}")
+                    # Fall back to raw text
+                    text = raw_text
+                self._type_text(text)
+                self.last_dictated_text = text
+                self._play_sound("done")
+                self.transcription_done.emit(text, mode)
+                self.config.add_history_entry(text, 0, "auto_ai", original_text=raw_text)
+            else:
+                self._type_text(text)
+                self.last_dictated_text = text
+                self._play_sound("done")
+                self.transcription_done.emit(text, mode)
+                self.config.add_history_entry(text, 0, mode)
         elif mode == "ai":
             self.transcription_done.emit(text, mode)
             self._handle_ai_edit(text)
@@ -343,7 +362,7 @@ class WhisperEngine(QObject):
         return text
 
     def _get_system_prompt(self):
-        return self.config.get_active_prompt()
+        return self.config.get_full_system_prompt()
 
     def _warmup_ollama(self):
         """Load the model into VRAM without generating a response."""
@@ -446,6 +465,87 @@ class WhisperEngine(QObject):
             )
             response.raise_for_status()
             return response.json()["content"][0]["text"].strip()
+
+    def _ai_auto_transform(self, text):
+        """Run auto AI transformation on transcribed text."""
+        provider = self.config.get("ai_provider")
+        system_prompt = self._get_system_prompt()
+
+        if provider == "ollama":
+            url = "http://localhost:11434"
+            model = self.config.get("ollama_model")
+            response = requests.post(
+                f"{url}/api/chat",
+                json={
+                    "model": model,
+                    "stream": False,
+                    "keep_alive": "10m",
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": text},
+                    ],
+                },
+                timeout=120,
+            )
+            response.raise_for_status()
+            result = response.json()["message"]["content"].strip()
+        else:
+            cloud_provider = self.config.get("cloud_provider")
+            api_key = self.config.get("cloud_api_key")
+            model = self.config.get("cloud_model")
+            if not api_key:
+                raise ValueError("API-nyckel saknas.")
+
+            if cloud_provider in ("openai", "groq"):
+                base_url = (
+                    "https://api.groq.com/openai/v1/chat/completions"
+                    if cloud_provider == "groq"
+                    else "https://api.openai.com/v1/chat/completions"
+                )
+                response = requests.post(
+                    base_url,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": text},
+                        ],
+                        "max_tokens": 1000,
+                        "temperature": 0.3,
+                    },
+                    timeout=30,
+                )
+                response.raise_for_status()
+                result = response.json()["choices"][0]["message"]["content"].strip()
+            else:
+                response = requests.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": api_key,
+                        "Content-Type": "application/json",
+                        "anthropic-version": "2023-06-01",
+                    },
+                    json={
+                        "model": model,
+                        "system": system_prompt,
+                        "messages": [
+                            {"role": "user", "content": text},
+                        ],
+                        "max_tokens": 1000,
+                    },
+                    timeout=30,
+                )
+                response.raise_for_status()
+                result = response.json()["content"][0]["text"].strip()
+
+        result = self._clean_ai_response(result)
+        if not result:
+            return text  # Fall back to original if AI returns empty
+        return result
 
     def _type_text(self, text):
         if not text:
