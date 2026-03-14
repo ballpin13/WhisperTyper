@@ -235,11 +235,12 @@ class SettingsTab(QWidget):
         row.addWidget(QLabel("API-nyckel:"))
         self._api_key_input = QLineEdit()
         self._api_key_input.setEchoMode(QLineEdit.Password)
-        self._api_key_input.setText(self.config.get("cloud_api_key"))
+        # Ladda provider-specifik nyckel om den finns, annars generell
+        _cp = self.config.get("cloud_provider")
+        _saved = self.config.get(f"cloud_api_key_{_cp}") or self.config.get("cloud_api_key")
+        self._api_key_input.setText(_saved or "")
         self._api_key_input.setMinimumWidth(250)
-        self._api_key_input.editingFinished.connect(
-            lambda: self._save("cloud_api_key", self._api_key_input.text())
-        )
+        self._api_key_input.editingFinished.connect(self._save_api_key)
         row.addWidget(self._api_key_input)
         row.addStretch()
         cloud_layout.addLayout(row)
@@ -498,10 +499,27 @@ class SettingsTab(QWidget):
         self._ollama_model_combo.setEnabled(False)
         self._ollama_retry_btn.setVisible(True)
 
+    def _save_api_key(self):
+        key = self._api_key_input.text()
+        provider = self.config.get("cloud_provider")
+        self._save("cloud_api_key", key)
+        self._save(f"cloud_api_key_{provider}", key)
+
     def _on_cloud_provider_changed(self, index):
+        # Spara nuvarande nyckel till provider-specifikt fält
+        old_provider = self.config.get("cloud_provider")
+        current_key = self._api_key_input.text()
+        if old_provider and current_key:
+            self._save(f"cloud_api_key_{old_provider}", current_key)
+
         provider = self._cloud_provider_combo.itemData(index)
         self._save("cloud_provider", provider)
         self._update_cloud_models()
+
+        # Ladda den nya providerns sparade nyckel
+        saved_key = self.config.get(f"cloud_api_key_{provider}") or ""
+        self._api_key_input.setText(saved_key)
+        self._save("cloud_api_key", saved_key)
 
     def _update_cloud_models(self):
         self._cloud_model_combo.clear()
