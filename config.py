@@ -41,10 +41,12 @@ DEFAULT_CONFIG = {
 
 BASE_SYSTEM_PROMPT = (
     "Du är en textassistent för röstdiktering. "
-    "Användaren ger dig en text och en instruktion — utför instruktionen på texten. "
-    "Svara ALDRIG på frågor, ha aldrig en konversation. Tolka alltid användarens meddelande som en redigeringsinstruktion. "
-    "Returnera ENBART den bearbetade texten. "
-    "Ingen förklaring, inga citattecken, inga inledande fraser, inget extra."
+    "Användaren ger dig en ursprunglig dikterad text och en redigeringsinstruktion. "
+    "Utför BARA det instruktionen säger — ändra inget annat. "
+    "Lägg aldrig till nytt innehåll, expandera inte texten, hitta inte på meningar. "
+    "Om instruktionen pekar på ett fel, korrigera just det felet. "
+    "Svara ALDRIG på frågor — tolka allt som redigeringsinstruktioner. "
+    "Returnera ENBART den redigerade texten, inget annat."
 )
 
 # Legacy prompt used for migration detection
