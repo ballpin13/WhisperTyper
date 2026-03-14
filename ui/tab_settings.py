@@ -508,7 +508,7 @@ class SettingsTab(QWidget):
         if provider == "openai":
             models = ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo"]
         else:
-            models = ["claude-sonnet-4-20250514", "claude-haiku-4-20250414"]
+            models = ["claude-sonnet-4-6-20250514", "claude-haiku-4-5-20251001"]
         current = self.config.get("cloud_model")
         for m in models:
             self._cloud_model_combo.addItem(m)
