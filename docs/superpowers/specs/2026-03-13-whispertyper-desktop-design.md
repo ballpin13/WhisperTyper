@@ -180,11 +180,16 @@ Organiserat i visuella sektioner med rubriker.
 
 ### Whisper
 
-| Inställning | Typ | Standard | Beskrivning |
+| Inställning | Typ | Standard | Villkor |
 |---|---|---|---|
-| Modell | Dropdown | medium | tiny/base/small/medium/large |
-| Språk | Dropdown | Svenska | Svenska, Engelska, Auto-detect |
-| Enhet | Info-text | (auto) | Visar GPU/CPU — ej redigerbar |
+| Transkribering | Dropdown | Lokal (Whisper) | Lokal / Cloud |
+| Modell | Dropdown | medium | Visas om lokal: tiny/base/small/medium/large |
+| Enhet | Dropdown | Auto | Visas om lokal: Auto/CPU/GPU |
+| Cloud-provider | Dropdown | Groq (gratis) | Visas om cloud: Groq / OpenAI |
+| Cloud-modell | Dropdown | whisper-large-v3-turbo | Visas om cloud, filtreras per provider |
+| Språk | Dropdown | Svenska | Alltid synlig: Svenska, Engelska, Auto-detect |
+
+Cloud-läge använder API-nyckel från AI-inställningarna (samma nyckel per provider). Vid cloud-läge hoppas lokal modellnedladdning över — omedelbar start.
 
 ### Kortkommandon
 
@@ -201,7 +206,7 @@ Tangentfångare: klicka på fältet, tryck önskad tangent. Validering: samma ta
 |---|---|---|---|
 | Provider | Dropdown | Lokal (Ollama) | — |
 | Ollama-modell | Dropdown | mistral:7b | Visas om Ollama valt |
-| Cloud-provider | Dropdown | OpenAI | Visas om cloud valt (OpenAI / Anthropic) |
+| Cloud-provider | Dropdown | OpenAI | Visas om cloud valt (OpenAI / Anthropic / Groq) |
 | Cloud-modell | Dropdown | gpt-4o-mini | Visas om cloud valt, modeller filtreras per provider |
 | API-nyckel | Lösenordsfält | — | Visas om cloud valt |
 
@@ -211,11 +216,15 @@ Ollama-dropdown hämtar installerade modeller automatiskt via API. Om Ollama int
 
 - **Aktiv profil** — Dropdown
 - **Knappar** — Skapa ny, Ta bort (ej standardprofilen)
-- **Textfält** — Redigera vald profils systemprompt
+- **Auto-körning** — Checkbox "Kör automatiskt på varje diktering" (per profil)
+- **Textfält** — Redigera vald profils profilprompt (placeholder: "Lämna tom för enkel korrigering...")
 - **Standardprofil** — Kan redigeras men inte tas bort
 
-Standard systemprompt:
-> "Du är en textassistent. Användaren har dikterat en text och vill nu ändra den. Returnera BARA den redigerade texten, inget annat. Ingen förklaring, inga citattecken. Om användaren säger att du hörde fel, korrigera texten. Om användaren ger en redigeringsinstruktion, utför den."
+Promptsystemet består av två delar:
+1. **Bas-systemprompt** (fast, dold) — output-regler som alltid inkluderas
+2. **Profilprompt** (redigerbar) — användarens instruktion för vad AI:n ska göra
+
+Om auto-körning är aktiverad körs AI-profilen automatiskt på varje diktering (F9) istället för bara vid AI-redigering. Se `docs/superpowers/specs/2026-03-14-prompt-profiles-redesign.md` för fullständig spec.
 
 ### Mikrofon
 

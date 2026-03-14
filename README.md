@@ -70,6 +70,7 @@ Alla inställningar nås via **Inställningar-fliken** i appen och sparas i `con
 - **Enhet** — Auto, CPU, GPU (NVIDIA CUDA)
 - **Kortkommandon** — Diktering (F9), AI-redigering (Ctrl+F9)
 - **Ordlista** — Ange namn och termer (ett per rad) som Whisper ska känna igen korrekt
-- **AI-redigering** — Ollama (lokal) eller Cloud (OpenAI/Anthropic)
-- **Promptprofiler** — Anpassa AI-instruktioner
+- **Whisper-transkribering** — Lokal (faster-whisper) eller Cloud (Groq/OpenAI)
+- **AI-redigering** — Ollama (lokal) eller Cloud (OpenAI/Anthropic/Groq)
+- **Promptprofiler** — Anpassa AI-instruktioner med valfri auto-körning per profil
 - **Ljud & notiser** — Ljudeffekter och popup-notiser
