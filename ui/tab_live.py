@@ -17,6 +17,7 @@ class LiveTab(QWidget):
         self._connect_signals()
 
     def _setup_ui(self):
+        self.setStyleSheet("LiveTab { background: white; }")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(4)

@@ -65,9 +65,10 @@ class SettingsTab(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
+        self.setStyleSheet("SettingsTab { background: white; }")
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; }")
+        scroll.setStyleSheet("QScrollArea { border: none; background: white; }")
 
         container = QWidget()
         layout = QVBoxLayout(container)
