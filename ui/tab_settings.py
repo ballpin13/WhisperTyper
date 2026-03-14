@@ -2,10 +2,51 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QComboBox, QSlider, QCheckBox, QLineEdit, QTextEdit,
     QPlainTextEdit, QFrame, QScrollArea, QInputDialog, QMessageBox,
+    QDialog, QDialogButtonBox, QFormLayout,
 )
 from PySide6.QtCore import Qt, Slot
-from PySide6.QtGui import QFont
 import requests
+
+
+class NoScrollComboBox(QComboBox):
+    """QComboBox that ignores wheel events when not focused."""
+    def wheelEvent(self, event):
+        if not self.hasFocus():
+            event.ignore()
+        else:
+            super().wheelEvent(event)
+
+
+class VocabularyDialog(QDialog):
+    """Modal dialog for editing the vocabulary word list."""
+    def __init__(self, config, parent=None):
+        super().__init__(parent)
+        self.config = config
+        self.setWindowTitle("Ordlista")
+        self.setMinimumSize(300, 200)
+
+        layout = QVBoxLayout(self)
+
+        hint = QLabel("Ange ord som Whisper ska känna igen, ett per rad")
+        hint.setStyleSheet("color: #666; font-size: 11px;")
+        layout.addWidget(hint)
+
+        self._edit = QPlainTextEdit()
+        self._edit.setPlainText("\n".join(config.get_vocabulary()))
+        layout.addWidget(self._edit)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Save).setText("Spara")
+        buttons.button(QDialogButtonBox.Cancel).setText("Avbryt")
+        buttons.accepted.connect(self._save_and_close)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _save_and_close(self):
+        text = self._edit.toPlainText()
+        words = [w.strip() for w in text.splitlines() if w.strip()]
+        self.config.set_vocabulary(words)
+        self.accept()
 
 
 class SettingsTab(QWidget):
@@ -27,17 +68,29 @@ class SettingsTab(QWidget):
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        layout.setSpacing(4)
 
-        # ── Whisper ──
-        layout.addWidget(self._section_label("Whisper"))
-        whisper_frame = self._card()
-        wl = QVBoxLayout(whisper_frame)
+        self._build_group_transcription(layout)
+        layout.addWidget(self._separator())
+        self._build_group_ai(layout)
+        layout.addWidget(self._separator())
+        self._build_group_controls(layout)
+        layout.addWidget(self._separator())
+        self._build_group_sound(layout)
 
-        # Provider (local / cloud)
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Transkribering:"))
-        self._whisper_provider_combo = QComboBox()
+        layout.addStretch()
+        scroll.setWidget(container)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(scroll)
+
+    def _build_group_transcription(self, parent_layout):
+        parent_layout.addWidget(self._group_label("Transkribering"))
+        form = QFormLayout()
+        form.setSpacing(4)
+
+        # Provider
+        self._whisper_provider_combo = NoScrollComboBox()
         self._whisper_provider_combo.addItem("Lokal (Whisper)", "local")
         self._whisper_provider_combo.addItem("Cloud", "cloud")
         current_wp = self.config.get("whisper_provider")
@@ -45,33 +98,19 @@ class SettingsTab(QWidget):
             if self._whisper_provider_combo.itemData(i) == current_wp:
                 self._whisper_provider_combo.setCurrentIndex(i)
         self._whisper_provider_combo.currentIndexChanged.connect(self._on_whisper_provider_changed)
-        row.addWidget(self._whisper_provider_combo)
-        row.addStretch()
-        wl.addLayout(row)
+        form.addRow("Provider:", self._whisper_provider_combo)
 
-        # Local options
-        self._whisper_local_widget = QWidget()
-        local_layout = QVBoxLayout(self._whisper_local_widget)
-        local_layout.setContentsMargins(0, 0, 0, 0)
-
-        # Model
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Modell:"))
-        self._model_combo = QComboBox()
+        # Local: Model
+        self._model_combo = NoScrollComboBox()
         for m in ["tiny", "base", "small", "medium", "large"]:
             self._model_combo.addItem(m)
         self._model_combo.setCurrentText(self.config.get("whisper_model"))
-        self._model_combo.currentTextChanged.connect(
-            lambda v: self._save("whisper_model", v)
-        )
-        row.addWidget(self._model_combo)
-        row.addStretch()
-        local_layout.addLayout(row)
+        self._model_combo.currentTextChanged.connect(lambda v: self._save("whisper_model", v))
+        self._model_label = QLabel("Modell:")
+        form.addRow(self._model_label, self._model_combo)
 
-        # Device
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Enhet:"))
-        self._device_combo = QComboBox()
+        # Local: Device
+        self._device_combo = NoScrollComboBox()
         self._device_combo.addItem("Auto", "auto")
         self._device_combo.addItem("CPU", "cpu")
         try:
@@ -88,24 +127,20 @@ class SettingsTab(QWidget):
         self._device_combo.currentIndexChanged.connect(
             lambda i: self._save("whisper_device", self._device_combo.itemData(i))
         )
-        row.addWidget(self._device_combo)
+        self._device_row = QWidget()
+        device_row_layout = QHBoxLayout(self._device_row)
+        device_row_layout.setContentsMargins(0, 0, 0, 0)
+        device_row_layout.addWidget(self._device_combo)
         self._device_note = QLabel("")
         self._device_note.setStyleSheet("color: #666; font-size: 11px;")
         self._update_device_note()
-        row.addWidget(self._device_note)
-        row.addStretch()
-        local_layout.addLayout(row)
+        device_row_layout.addWidget(self._device_note)
+        device_row_layout.addStretch()
+        self._device_label = QLabel("Enhet:")
+        form.addRow(self._device_label, self._device_row)
 
-        wl.addWidget(self._whisper_local_widget)
-
-        # Cloud options
-        self._whisper_cloud_widget = QWidget()
-        cloud_w_layout = QVBoxLayout(self._whisper_cloud_widget)
-        cloud_w_layout.setContentsMargins(0, 0, 0, 0)
-
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Cloud-provider:"))
-        self._cloud_whisper_combo = QComboBox()
+        # Cloud: Provider
+        self._cloud_whisper_combo = NoScrollComboBox()
         self._cloud_whisper_combo.addItem("Groq (gratis)", "groq")
         self._cloud_whisper_combo.addItem("OpenAI", "openai")
         current_cwp = self.config.get("cloud_whisper_provider")
@@ -113,32 +148,26 @@ class SettingsTab(QWidget):
             if self._cloud_whisper_combo.itemData(i) == current_cwp:
                 self._cloud_whisper_combo.setCurrentIndex(i)
         self._cloud_whisper_combo.currentIndexChanged.connect(self._on_cloud_whisper_provider_changed)
-        row.addWidget(self._cloud_whisper_combo)
-        row.addStretch()
-        cloud_w_layout.addLayout(row)
+        self._cloud_whisper_label = QLabel("Cloud-provider:")
+        form.addRow(self._cloud_whisper_label, self._cloud_whisper_combo)
 
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Modell:"))
-        self._cloud_whisper_model_combo = QComboBox()
+        # Cloud: Model
+        self._cloud_whisper_model_combo = NoScrollComboBox()
         self._update_cloud_whisper_models()
         self._cloud_whisper_model_combo.currentTextChanged.connect(
             lambda v: self._save("cloud_whisper_model", v)
         )
-        row.addWidget(self._cloud_whisper_model_combo)
-        row.addStretch()
-        cloud_w_layout.addLayout(row)
+        self._cloud_whisper_model_label = QLabel("Cloud-modell:")
+        form.addRow(self._cloud_whisper_model_label, self._cloud_whisper_model_combo)
 
+        # Cloud: key note
+        self._whisper_cloud_key_note_label = QLabel("")
         self._whisper_cloud_key_note = QLabel("Använder API-nyckel från AI-inställningarna")
         self._whisper_cloud_key_note.setStyleSheet("color: #666; font-size: 11px;")
-        cloud_w_layout.addWidget(self._whisper_cloud_key_note)
+        form.addRow(self._whisper_cloud_key_note_label, self._whisper_cloud_key_note)
 
-        wl.addWidget(self._whisper_cloud_widget)
-        self._update_whisper_provider_visibility()
-
-        # Language (shared between local and cloud)
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Spr\u00e5k:"))
-        self._lang_combo = QComboBox()
+        # Language (shared)
+        self._lang_combo = NoScrollComboBox()
         self._lang_combo.addItem("Svenska", "sv")
         self._lang_combo.addItem("Engelska", "en")
         self._lang_combo.addItem("Auto-detect", "auto")
@@ -149,81 +178,26 @@ class SettingsTab(QWidget):
         self._lang_combo.currentIndexChanged.connect(
             lambda i: self._save("language", self._lang_combo.itemData(i))
         )
-        row.addWidget(self._lang_combo)
-        row.addStretch()
-        wl.addLayout(row)
+        form.addRow("Språk:", self._lang_combo)
 
-        layout.addWidget(whisper_frame)
-
-        # ── Ordlista ──
-        layout.addWidget(self._section_label("Ordlista"))
-        vocab_frame = self._card()
-        vl = QVBoxLayout(vocab_frame)
-
-        vocab_hint = QLabel("Ange ord som Whisper ska känna igen, ett per rad")
-        vocab_hint.setStyleSheet("color: #666; font-size: 11px;")
-        vl.addWidget(vocab_hint)
-
-        self._vocab_edit = QPlainTextEdit()
-        self._vocab_edit.setMaximumHeight(120)
-        self._vocab_edit.setStyleSheet(
-            "QPlainTextEdit { border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px; }"
+        # Vocabulary button
+        vocab_btn = QPushButton("Redigera…")
+        vocab_btn.setStyleSheet(
+            "QPushButton { padding: 4px 12px; font-size: 11px; }"
         )
-        vocab = self.config.get_vocabulary()
-        self._vocab_edit.setPlainText("\n".join(vocab))
-        vl.addWidget(self._vocab_edit)
+        vocab_btn.clicked.connect(self._open_vocabulary_dialog)
+        form.addRow("Ordlista:", vocab_btn)
 
-        save_vocab_btn = QPushButton("Spara ordlista")
-        save_vocab_btn.setStyleSheet("""
-            QPushButton { background: #e3f2fd; color: #1976D2; border: none;
-                          border-radius: 6px; padding: 6px 16px; font-size: 12px; }
-            QPushButton:hover { background: #bbdefb; }
-        """)
-        save_vocab_btn.clicked.connect(self._save_vocabulary)
-        vl.addWidget(save_vocab_btn, alignment=Qt.AlignLeft)
+        parent_layout.addLayout(form)
+        self._update_whisper_provider_visibility()
 
-        layout.addWidget(vocab_frame)
+    def _build_group_ai(self, parent_layout):
+        parent_layout.addWidget(self._group_label("AI-redigering"))
+        form = QFormLayout()
+        form.setSpacing(4)
 
-        # ── Kortkommandon ──
-        layout.addWidget(self._section_label("Kortkommandon"))
-        hotkey_frame = self._card()
-        hl = QVBoxLayout(hotkey_frame)
-
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Diktera:"))
-        self._hotkey_dictate = KeyCaptureButton(self.config.get("hotkey_dictate"))
-        self._hotkey_dictate.key_changed.connect(
-            lambda k: self._save_hotkey("hotkey_dictate", k)
-        )
-        row.addWidget(self._hotkey_dictate)
-        row.addStretch()
-        hl.addLayout(row)
-
-        row = QHBoxLayout()
-        row.addWidget(QLabel("AI-redigering:"))
-        self._hotkey_ai = KeyCaptureButton(self.config.get("hotkey_ai"))
-        self._hotkey_ai.key_changed.connect(
-            lambda k: self._save_hotkey("hotkey_ai", k)
-        )
-        row.addWidget(self._hotkey_ai)
-        row.addStretch()
-        hl.addLayout(row)
-
-        self._hotkey_error = QLabel("")
-        self._hotkey_error.setStyleSheet("color: #c62828; font-size: 11px;")
-        self._hotkey_error.setVisible(False)
-        hl.addWidget(self._hotkey_error)
-
-        layout.addWidget(hotkey_frame)
-
-        # ── AI-redigering ──
-        layout.addWidget(self._section_label("AI-redigering"))
-        ai_frame = self._card()
-        al = QVBoxLayout(ai_frame)
-
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Provider:"))
-        self._provider_combo = QComboBox()
+        # Provider
+        self._provider_combo = NoScrollComboBox()
         self._provider_combo.addItem("Lokal (Ollama)", "ollama")
         self._provider_combo.addItem("Cloud", "cloud")
         current_provider = self.config.get("ai_provider")
@@ -231,40 +205,28 @@ class SettingsTab(QWidget):
             if self._provider_combo.itemData(i) == current_provider:
                 self._provider_combo.setCurrentIndex(i)
         self._provider_combo.currentIndexChanged.connect(self._on_provider_changed)
-        row.addWidget(self._provider_combo)
-        row.addStretch()
-        al.addLayout(row)
+        form.addRow("Provider:", self._provider_combo)
 
-        # Ollama model
-        self._ollama_row = QHBoxLayout()
-        self._ollama_row_widget = QWidget()
-        ollama_inner = QHBoxLayout(self._ollama_row_widget)
-        ollama_inner.setContentsMargins(0, 0, 0, 0)
-        ollama_inner.addWidget(QLabel("Ollama-modell:"))
-        self._ollama_model_combo = QComboBox()
+        # Ollama model + retry
+        ollama_widget = QWidget()
+        ollama_layout = QHBoxLayout(ollama_widget)
+        ollama_layout.setContentsMargins(0, 0, 0, 0)
+        self._ollama_model_combo = NoScrollComboBox()
         self._ollama_model_combo.setMinimumWidth(200)
-        self._ollama_retry_btn = QPushButton("F\u00f6rs\u00f6k igen")
-        self._load_ollama_models()
-        self._ollama_model_combo.currentTextChanged.connect(
-            lambda v: self._save("ollama_model", v)
-        )
-        ollama_inner.addWidget(self._ollama_model_combo)
-        self._ollama_retry_btn.setStyleSheet(
-            "QPushButton { padding: 4px 8px; font-size: 11px; }"
-        )
+        self._ollama_retry_btn = QPushButton("Försök igen")
+        self._ollama_retry_btn.setStyleSheet("QPushButton { padding: 4px 8px; font-size: 11px; }")
         self._ollama_retry_btn.clicked.connect(self._load_ollama_models)
-        ollama_inner.addWidget(self._ollama_retry_btn)
-        ollama_inner.addStretch()
-        al.addWidget(self._ollama_row_widget)
+        self._load_ollama_models()
+        self._ollama_model_combo.currentTextChanged.connect(lambda v: self._save("ollama_model", v))
+        ollama_layout.addWidget(self._ollama_model_combo)
+        ollama_layout.addWidget(self._ollama_retry_btn)
+        ollama_layout.addStretch()
+        self._ollama_row_widget = ollama_widget
+        self._ollama_row_label = QLabel("Ollama-modell:")
+        form.addRow(self._ollama_row_label, self._ollama_row_widget)
 
         # Cloud provider
-        self._cloud_widget = QWidget()
-        cloud_layout = QVBoxLayout(self._cloud_widget)
-        cloud_layout.setContentsMargins(0, 0, 0, 0)
-
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Cloud-provider:"))
-        self._cloud_provider_combo = QComboBox()
+        self._cloud_provider_combo = NoScrollComboBox()
         self._cloud_provider_combo.addItem("OpenAI", "openai")
         self._cloud_provider_combo.addItem("Anthropic", "anthropic")
         self._cloud_provider_combo.addItem("Groq", "groq")
@@ -272,80 +234,58 @@ class SettingsTab(QWidget):
         for i in range(self._cloud_provider_combo.count()):
             if self._cloud_provider_combo.itemData(i) == current_cp:
                 self._cloud_provider_combo.setCurrentIndex(i)
-        self._cloud_provider_combo.currentIndexChanged.connect(
-            self._on_cloud_provider_changed
-        )
-        row.addWidget(self._cloud_provider_combo)
-        row.addStretch()
-        cloud_layout.addLayout(row)
+        self._cloud_provider_combo.currentIndexChanged.connect(self._on_cloud_provider_changed)
+        self._cloud_provider_label = QLabel("Cloud-provider:")
+        form.addRow(self._cloud_provider_label, self._cloud_provider_combo)
 
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Cloud-modell:"))
-        self._cloud_model_combo = QComboBox()
+        # Cloud model
+        self._cloud_model_combo = NoScrollComboBox()
         self._update_cloud_models()
-        self._cloud_model_combo.currentTextChanged.connect(
-            lambda v: self._save("cloud_model", v)
-        )
-        row.addWidget(self._cloud_model_combo)
-        row.addStretch()
-        cloud_layout.addLayout(row)
+        self._cloud_model_combo.currentTextChanged.connect(lambda v: self._save("cloud_model", v))
+        self._cloud_model_label = QLabel("Modell:")
+        form.addRow(self._cloud_model_label, self._cloud_model_combo)
 
-        row = QHBoxLayout()
-        row.addWidget(QLabel("API-nyckel:"))
+        # API key
         self._api_key_input = QLineEdit()
         self._api_key_input.setEchoMode(QLineEdit.Password)
-        # Ladda provider-specifik nyckel om den finns, annars generell
         _cp = self.config.get("cloud_provider")
         _saved = self.config.get(f"cloud_api_key_{_cp}") or self.config.get("cloud_api_key")
         self._api_key_input.setText(_saved or "")
         self._api_key_input.setMinimumWidth(250)
         self._api_key_input.editingFinished.connect(self._save_api_key)
-        row.addWidget(self._api_key_input)
-        row.addStretch()
-        cloud_layout.addLayout(row)
+        self._api_key_label = QLabel("API-nyckel:")
+        form.addRow(self._api_key_label, self._api_key_input)
 
-        al.addWidget(self._cloud_widget)
-        self._update_provider_visibility()
+        parent_layout.addLayout(form)
 
-        layout.addWidget(ai_frame)
-
-        # ── Promptprofiler ──
-        layout.addWidget(self._section_label("Promptprofiler"))
-        prompt_frame = self._card()
-        pl = QVBoxLayout(prompt_frame)
-
+        # Prompt profiles (not in form layout)
         row = QHBoxLayout()
-        row.addWidget(QLabel("Aktiv profil:"))
-        self._prompt_combo = QComboBox()
-
+        row.addWidget(QLabel("Profil:"))
+        self._prompt_combo = NoScrollComboBox()
         self._add_profile_btn = QPushButton("Skapa ny")
-        self._add_profile_btn.setStyleSheet(
-            "QPushButton { padding: 4px 12px; font-size: 11px; }"
-        )
+        self._add_profile_btn.setStyleSheet("QPushButton { padding: 4px 12px; font-size: 11px; }")
         self._add_profile_btn.clicked.connect(self._add_profile)
-
         self._del_profile_btn = QPushButton("Ta bort")
         self._del_profile_btn.setStyleSheet(
             "QPushButton { padding: 4px 12px; font-size: 11px; color: #c62828; }"
         )
         self._del_profile_btn.clicked.connect(self._delete_profile)
-
         self._update_prompt_combo()
         self._prompt_combo.currentIndexChanged.connect(self._on_prompt_profile_changed)
         row.addWidget(self._prompt_combo)
         row.addWidget(self._add_profile_btn)
         row.addWidget(self._del_profile_btn)
         row.addStretch()
-        pl.addLayout(row)
+        parent_layout.addLayout(row)
 
         self._auto_run_cb = QCheckBox("Kör automatiskt på varje diktering")
         self._auto_run_cb.setToolTip(
             "AI-profilen körs automatiskt efter varje diktering istället för bara vid AI-redigering"
         )
-        pl.addWidget(self._auto_run_cb)
+        parent_layout.addWidget(self._auto_run_cb)
 
         self._prompt_edit = QTextEdit()
-        self._prompt_edit.setMaximumHeight(100)
+        self._prompt_edit.setMaximumHeight(80)
         self._prompt_edit.setPlaceholderText(
             'Lämna tom för enkel korrigering, eller skriv en instruktion (t.ex. "Översätt till engelska")'
         )
@@ -353,7 +293,7 @@ class SettingsTab(QWidget):
             "QTextEdit { border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px; }"
         )
         self._load_prompt_text()
-        pl.addWidget(self._prompt_edit)
+        parent_layout.addWidget(self._prompt_edit)
 
         save_prompt_btn = QPushButton("Spara prompt")
         save_prompt_btn.setStyleSheet("""
@@ -362,17 +302,34 @@ class SettingsTab(QWidget):
             QPushButton:hover { background: #bbdefb; }
         """)
         save_prompt_btn.clicked.connect(self._save_prompt)
-        pl.addWidget(save_prompt_btn, alignment=Qt.AlignLeft)
+        parent_layout.addWidget(save_prompt_btn, alignment=Qt.AlignLeft)
 
-        layout.addWidget(prompt_frame)
+        self._update_provider_visibility()
 
-        # ── Mikrofon ──
-        layout.addWidget(self._section_label("Mikrofon"))
-        mic_frame = self._card()
-        ml = QVBoxLayout(mic_frame)
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Inspelningsenhet:"))
-        self._mic_combo = QComboBox()
+    def _build_group_controls(self, parent_layout):
+        parent_layout.addWidget(self._group_label("Kontroller"))
+        form = QFormLayout()
+        form.setSpacing(4)
+
+        # Hotkeys
+        self._hotkey_dictate = KeyCaptureButton(self.config.get("hotkey_dictate"))
+        self._hotkey_dictate.key_changed.connect(lambda k: self._save_hotkey("hotkey_dictate", k))
+        form.addRow("Diktera:", self._hotkey_dictate)
+
+        self._hotkey_ai = KeyCaptureButton(self.config.get("hotkey_ai"))
+        self._hotkey_ai.key_changed.connect(lambda k: self._save_hotkey("hotkey_ai", k))
+        form.addRow("AI-redigering:", self._hotkey_ai)
+
+        # Hotkey error (explicit label to avoid orphan gap when hidden)
+        self._hotkey_error_label = QLabel("")
+        self._hotkey_error_label.setVisible(False)
+        self._hotkey_error = QLabel("")
+        self._hotkey_error.setStyleSheet("color: #c62828; font-size: 11px;")
+        self._hotkey_error.setVisible(False)
+        form.addRow(self._hotkey_error_label, self._hotkey_error)
+
+        # Microphone
+        self._mic_combo = NoScrollComboBox()
         self._mic_combo.addItem("Systemstandard", "default")
         for mic in self.engine.get_microphones():
             self._mic_combo.addItem(mic["name"], str(mic["index"]))
@@ -383,97 +340,79 @@ class SettingsTab(QWidget):
         self._mic_combo.currentIndexChanged.connect(
             lambda i: self._save("microphone", self._mic_combo.itemData(i))
         )
-        row.addWidget(self._mic_combo)
-        row.addStretch()
-        ml.addLayout(row)
-        layout.addWidget(mic_frame)
+        form.addRow("Mikrofon:", self._mic_combo)
 
-        # ── Ljud ──
-        layout.addWidget(self._section_label("Ljud"))
-        sound_frame = self._card()
-        sl = QVBoxLayout(sound_frame)
-
-        self._sound_start_cb = QCheckBox("Ljud vid inspelningsstart")
-        self._sound_start_cb.setChecked(self.config.get("sound_on_record_start"))
-        self._sound_start_cb.toggled.connect(
-            lambda v: self._save("sound_on_record_start", v)
-        )
-        sl.addWidget(self._sound_start_cb)
-
-        self._sound_done_cb = QCheckBox("Ljud vid transkribering klar")
-        self._sound_done_cb.setChecked(self.config.get("sound_on_transcription_done"))
-        self._sound_done_cb.toggled.connect(
-            lambda v: self._save("sound_on_transcription_done", v)
-        )
-        sl.addWidget(self._sound_done_cb)
-
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Volym:"))
-        self._volume_slider = QSlider(Qt.Horizontal)
-        self._volume_slider.setRange(0, 100)
-        self._volume_slider.setValue(self.config.get("sound_volume"))
-        self._volume_label = QLabel(f"{self.config.get('sound_volume')}%")
-        self._volume_slider.valueChanged.connect(self._on_volume_changed)
-        row.addWidget(self._volume_slider)
-        row.addWidget(self._volume_label)
-        sl.addLayout(row)
-
-        layout.addWidget(sound_frame)
-
-        # ── Notiser ──
-        layout.addWidget(self._section_label("Notiser"))
-        notis_frame = self._card()
-        nl = QVBoxLayout(notis_frame)
-
-        self._notis_cb = QCheckBox("Visa popup vid transkribering")
-        self._notis_cb.setChecked(self.config.get("show_notifications"))
-        self._notis_cb.toggled.connect(
-            lambda v: self._save("show_notifications", v)
-        )
-        nl.addWidget(self._notis_cb)
-
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Varaktighet:"))
-        self._notis_slider = QSlider(Qt.Horizontal)
-        self._notis_slider.setRange(2, 10)
-        self._notis_slider.setValue(self.config.get("notification_duration_sec"))
-        self._notis_label = QLabel(
-            f"{self.config.get('notification_duration_sec')} sek"
-        )
-        self._notis_slider.valueChanged.connect(self._on_notis_duration_changed)
-        row.addWidget(self._notis_slider)
-        row.addWidget(self._notis_label)
-        nl.addLayout(row)
-
-        layout.addWidget(notis_frame)
-
-        # ── \u00d6vrigt ──
-        layout.addWidget(self._section_label("\u00d6vrigt"))
-        other_frame = self._card()
-        ol = QVBoxLayout(other_frame)
-
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Max inspelningstid:"))
+        # Max recording time
+        rec_widget = QWidget()
+        rec_layout = QHBoxLayout(rec_widget)
+        rec_layout.setContentsMargins(0, 0, 0, 0)
         self._max_rec_slider = QSlider(Qt.Horizontal)
         self._max_rec_slider.setRange(10, 120)
         self._max_rec_slider.setValue(self.config.get("max_record_sec"))
         self._max_rec_label = QLabel(f"{self.config.get('max_record_sec')} sek")
         self._max_rec_slider.valueChanged.connect(self._on_max_record_changed)
-        row.addWidget(self._max_rec_slider)
-        row.addWidget(self._max_rec_label)
-        ol.addLayout(row)
+        rec_layout.addWidget(self._max_rec_slider)
+        rec_layout.addWidget(self._max_rec_label)
+        form.addRow("Max inspelningstid:", rec_widget)
 
-        self._autostart_cb = QCheckBox("Autostart vid inloggning")
-        self._autostart_cb.setChecked(self.config.get("autostart"))
-        self._autostart_cb.toggled.connect(
-            lambda v: self._save("autostart", v)
-        )
-        ol.addWidget(self._autostart_cb)
+        parent_layout.addLayout(form)
 
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Max sparad historik:"))
-        self._max_history_combo = QComboBox()
-        for label, val in [("100", 100), ("500", 500), ("1000", 1000), ("Obegr\u00e4nsad", 0)]:
+    def _build_group_sound(self, parent_layout):
+        parent_layout.addWidget(self._group_label("Ljud & Övrigt"))
+
+        # Checkboxes in horizontal row
+        cb_row = QHBoxLayout()
+        self._sound_start_cb = QCheckBox("Ljud vid start")
+        self._sound_start_cb.setChecked(self.config.get("sound_on_record_start"))
+        self._sound_start_cb.toggled.connect(lambda v: self._save("sound_on_record_start", v))
+        cb_row.addWidget(self._sound_start_cb)
+
+        self._sound_done_cb = QCheckBox("Ljud vid klar")
+        self._sound_done_cb.setChecked(self.config.get("sound_on_transcription_done"))
+        self._sound_done_cb.toggled.connect(lambda v: self._save("sound_on_transcription_done", v))
+        cb_row.addWidget(self._sound_done_cb)
+
+        self._notis_cb = QCheckBox("Popup-notis")
+        self._notis_cb.setChecked(self.config.get("show_notifications"))
+        self._notis_cb.toggled.connect(lambda v: self._save("show_notifications", v))
+        cb_row.addWidget(self._notis_cb)
+
+        cb_row.addStretch()
+        parent_layout.addLayout(cb_row)
+
+        # Form for sliders and remaining controls
+        form = QFormLayout()
+        form.setSpacing(4)
+
+        # Volume
+        vol_widget = QWidget()
+        vol_layout = QHBoxLayout(vol_widget)
+        vol_layout.setContentsMargins(0, 0, 0, 0)
+        self._volume_slider = QSlider(Qt.Horizontal)
+        self._volume_slider.setRange(0, 100)
+        self._volume_slider.setValue(self.config.get("sound_volume"))
+        self._volume_label = QLabel(f"{self.config.get('sound_volume')}%")
+        self._volume_slider.valueChanged.connect(self._on_volume_changed)
+        vol_layout.addWidget(self._volume_slider)
+        vol_layout.addWidget(self._volume_label)
+        form.addRow("Volym:", vol_widget)
+
+        # Notification duration
+        notis_widget = QWidget()
+        notis_layout = QHBoxLayout(notis_widget)
+        notis_layout.setContentsMargins(0, 0, 0, 0)
+        self._notis_slider = QSlider(Qt.Horizontal)
+        self._notis_slider.setRange(2, 10)
+        self._notis_slider.setValue(self.config.get("notification_duration_sec"))
+        self._notis_label = QLabel(f"{self.config.get('notification_duration_sec')} sek")
+        self._notis_slider.valueChanged.connect(self._on_notis_duration_changed)
+        notis_layout.addWidget(self._notis_slider)
+        notis_layout.addWidget(self._notis_label)
+        form.addRow("Notisvaraktighet:", notis_widget)
+
+        # Max history
+        self._max_history_combo = NoScrollComboBox()
+        for label, val in [("100", 100), ("500", 500), ("1000", 1000), ("Obegränsad", 0)]:
             self._max_history_combo.addItem(label, val)
         current_max = self.config.get("max_history")
         for i in range(self._max_history_combo.count()):
@@ -482,19 +421,35 @@ class SettingsTab(QWidget):
         self._max_history_combo.currentIndexChanged.connect(
             lambda i: self._save("max_history", self._max_history_combo.itemData(i))
         )
-        row.addWidget(self._max_history_combo)
-        row.addStretch()
-        ol.addLayout(row)
+        form.addRow("Max historik:", self._max_history_combo)
 
-        layout.addWidget(other_frame)
-        layout.addStretch()
+        parent_layout.addLayout(form)
 
-        scroll.setWidget(container)
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.addWidget(scroll)
+        # Autostart checkbox
+        self._autostart_cb = QCheckBox("Autostart vid inloggning")
+        self._autostart_cb.setChecked(self.config.get("autostart"))
+        self._autostart_cb.toggled.connect(lambda v: self._save("autostart", v))
+        parent_layout.addWidget(self._autostart_cb)
 
     # ── Helpers ──
+
+    def _group_label(self, text):
+        label = QLabel(text.upper())
+        label.setStyleSheet(
+            "color: #1976D2; font-size: 10px; font-weight: bold; margin-top: 4px;"
+        )
+        return label
+
+    def _separator(self):
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setStyleSheet("background-color: #eee; border: none;")
+        line.setFixedHeight(1)
+        return line
+
+    def _open_vocabulary_dialog(self):
+        dialog = VocabularyDialog(self.config, self)
+        dialog.exec()
 
     def _on_whisper_provider_changed(self, index):
         provider = self._whisper_provider_combo.itemData(index)
@@ -503,8 +458,18 @@ class SettingsTab(QWidget):
 
     def _update_whisper_provider_visibility(self):
         is_local = self.config.get("whisper_provider") == "local"
-        self._whisper_local_widget.setVisible(is_local)
-        self._whisper_cloud_widget.setVisible(not is_local)
+        # Local-only widgets
+        self._model_label.setVisible(is_local)
+        self._model_combo.setVisible(is_local)
+        self._device_label.setVisible(is_local)
+        self._device_row.setVisible(is_local)
+        # Cloud-only widgets
+        self._cloud_whisper_label.setVisible(not is_local)
+        self._cloud_whisper_combo.setVisible(not is_local)
+        self._cloud_whisper_model_label.setVisible(not is_local)
+        self._cloud_whisper_model_combo.setVisible(not is_local)
+        self._whisper_cloud_key_note_label.setVisible(not is_local)
+        self._whisper_cloud_key_note.setVisible(not is_local)
 
     def _on_cloud_whisper_provider_changed(self, index):
         provider = self._cloud_whisper_combo.itemData(index)
@@ -536,19 +501,6 @@ class SettingsTab(QWidget):
         else:
             self._device_note.setText(f"(Aktiv: {self.engine.device.upper()})")
 
-    def _section_label(self, text):
-        label = QLabel(text)
-        label.setFont(QFont("Segoe UI", 11, QFont.Bold))
-        label.setStyleSheet("color: #333; margin-top: 4px;")
-        return label
-
-    def _card(self):
-        frame = QFrame()
-        frame.setStyleSheet(
-            "QFrame { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; }"
-        )
-        return frame
-
     def _save(self, key, value):
         self.config.set(key, value)
 
@@ -557,11 +509,13 @@ class SettingsTab(QWidget):
         other_value = self.config.get(other_key)
         if value.lower() == other_value.lower():
             self._hotkey_error.setText(
-                f"Konflikt: {value} anv\u00e4nds redan f\u00f6r den andra funktionen."
+                f"Konflikt: {value} används redan för den andra funktionen."
             )
             self._hotkey_error.setVisible(True)
+            self._hotkey_error_label.setVisible(True)
             return
         self._hotkey_error.setVisible(False)
+        self._hotkey_error_label.setVisible(False)
         self.config.set(key, value)
         self.hotkey_changed.emit()
 
@@ -573,7 +527,13 @@ class SettingsTab(QWidget):
     def _update_provider_visibility(self):
         is_ollama = self.config.get("ai_provider") == "ollama"
         self._ollama_row_widget.setVisible(is_ollama)
-        self._cloud_widget.setVisible(not is_ollama)
+        self._ollama_row_label.setVisible(is_ollama)
+        self._cloud_provider_label.setVisible(not is_ollama)
+        self._cloud_provider_combo.setVisible(not is_ollama)
+        self._cloud_model_label.setVisible(not is_ollama)
+        self._cloud_model_combo.setVisible(not is_ollama)
+        self._api_key_label.setVisible(not is_ollama)
+        self._api_key_input.setVisible(not is_ollama)
 
     def _load_ollama_models(self):
         self._ollama_model_combo.clear()
@@ -592,7 +552,7 @@ class SettingsTab(QWidget):
                     return
         except Exception:
             pass
-        self._ollama_model_combo.addItem("Ollama ej tillg\u00e4nglig \u2014 starta Ollama")
+        self._ollama_model_combo.addItem("Ollama ej tillgänglig — starta Ollama")
         self._ollama_model_combo.setEnabled(False)
         self._ollama_retry_btn.setVisible(True)
 
@@ -682,7 +642,7 @@ class SettingsTab(QWidget):
 
     def _add_profile(self):
         name, ok = QInputDialog.getText(
-            self, "Ny promptprofil", "Namn p\u00e5 profilen:"
+            self, "Ny promptprofil", "Namn på profilen:"
         )
         if ok and name.strip():
             pid = name.strip().lower().replace(" ", "-")
@@ -712,11 +672,6 @@ class SettingsTab(QWidget):
                 self.profiles_changed.emit()
             except ValueError as e:
                 QMessageBox.warning(self, "Fel", str(e))
-
-    def _save_vocabulary(self):
-        text = self._vocab_edit.toPlainText()
-        words = [w.strip() for w in text.splitlines() if w.strip()]
-        self.config.set_vocabulary(words)
 
     def _on_volume_changed(self, value):
         self._volume_label.setText(f"{value}%")
