@@ -460,9 +460,8 @@ class WhisperEngine(QObject):
         try:
             pyperclip.copy(text)
             time.sleep(0.1)
-            # Släpp eventuellt kvarvarande modifier-tangenter
-            for key in (pynput_keyboard.Key.ctrl, pynput_keyboard.Key.alt,
-                        pynput_keyboard.Key.shift):
+            # Släpp eventuellt kvarvarande modifier-tangenter (EJ alt — triggar menyrad)
+            for key in (pynput_keyboard.Key.ctrl, pynput_keyboard.Key.shift):
                 try:
                     self._kb_controller.release(key)
                 except Exception:
