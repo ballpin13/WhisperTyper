@@ -654,13 +654,51 @@ class WhisperEngine(QObject):
 
         if self.last_injected_text:
             count = len(self.last_injected_text)
-            print(f"[Replace] Kör {count} backspace")
+            print(f"[Replace] Markerar {count} tecken bakåt")
+
+            # Select text backwards (Shift+Left × count)
+            self._kb_controller.press(pynput_keyboard.Key.shift)
             for i in range(count):
-                self._kb_controller.tap(pynput_keyboard.Key.backspace)
+                self._kb_controller.tap(pynput_keyboard.Key.left)
                 if i % 5 == 4:
                     time.sleep(0.03)
-            time.sleep(0.3)
+            self._kb_controller.release(pynput_keyboard.Key.shift)
+            time.sleep(0.2)
 
+            # Verify selection via clipboard
+            saved_clipboard = ""
+            try:
+                saved_clipboard = pyperclip.paste()
+            except Exception:
+                pass
+            pyperclip.copy("")
+            time.sleep(0.05)
+            with self._kb_controller.pressed(pynput_keyboard.Key.ctrl):
+                time.sleep(0.05)
+                self._kb_controller.tap("c")
+            time.sleep(0.15)
+            selected = pyperclip.paste()
+            selected_len = len(selected)
+            print(f"[Replace] Markerade {selected_len}/{count} tecken")
+
+            if selected_len < count:
+                # Some keystrokes were dropped — select more
+                missed = count - selected_len
+                print(f"[Replace] Missade {missed} tecken, markerar fler")
+                self._kb_controller.press(pynput_keyboard.Key.shift)
+                for i in range(missed):
+                    self._kb_controller.tap(pynput_keyboard.Key.left)
+                    time.sleep(0.05)
+                self._kb_controller.release(pynput_keyboard.Key.shift)
+                time.sleep(0.1)
+
+            # Restore clipboard before paste
+            try:
+                pyperclip.copy(saved_clipboard)
+            except Exception:
+                pass
+
+        # Paste new text (replaces selection if any)
         print(f"[Replace] Klistrar in: {new_text!r}")
         self._type_text(new_text)
 
