@@ -653,12 +653,13 @@ class WhisperEngine(QObject):
                 return
 
         if self.last_injected_text:
-            print(f"[Replace] Kör {len(self.last_injected_text)} backspace")
-            for i in range(len(self.last_injected_text)):
+            count = len(self.last_injected_text)
+            print(f"[Replace] Kör {count} backspace")
+            for i in range(count):
                 self._kb_controller.tap(pynput_keyboard.Key.backspace)
-                if i % 20 == 19:
-                    time.sleep(0.01)
-            time.sleep(0.15)
+                if i % 5 == 4:
+                    time.sleep(0.03)
+            time.sleep(0.3)
 
         print(f"[Replace] Klistrar in: {new_text!r}")
         self._type_text(new_text)
